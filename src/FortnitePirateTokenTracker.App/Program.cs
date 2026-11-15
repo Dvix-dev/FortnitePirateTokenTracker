@@ -87,10 +87,12 @@ if (command == "probe")
     }
 
     Console.WriteLine($"Tiempo de parseo: {sw.ElapsedMilliseconds} ms");
+
+    Console.WriteLine($"Posiciones de pawn: {reader.PawnPositions} · enlaces pawn→jugador: {reader.PawnLinks}");
     Console.WriteLine($"Cofres observados: {reader.Containers.Count}");
     foreach (var c in reader.Containers.Take(15))
     {
-        Console.WriteLine($"  [{c.TimeSeconds,7:0.0}s] {c.ClassName} lootTier={c.LootTier} searches={c.SearchAnimationCount} item={c.ItemId ?? "-"} pos={(c.HasPosition ? $"{c.X:0},{c.Y:0},{c.Z:0}" : "sin posición")}");
+        Console.WriteLine($"  [{c.TimeSeconds,7:0.0}s] {c.ClassName} pawn={c.SearchingPawn ?? "-"} owner={c.OwnerKey ?? "?"} pos={(c.HasPosition ? $"{c.X:0},{c.Y:0},{c.Z:0}" : "sin posición")}");
     }
 
     Console.WriteLine($"Pickups con item: {reader.Pickups.Count}");
@@ -146,7 +148,7 @@ if (command == "probe")
     Console.WriteLine($"Cofres dorados del evento: {reader.Prizes.Count}");
     foreach (var prize in reader.Prizes)
     {
-        Console.WriteLine($"  [{prize.TimeSeconds,7:0.0}s] prize={prize.PrizeTemplateId ?? "-"} tierData={prize.TierData ?? "-"} success={prize.Success} tier={prize.Tier} pawn={prize.OpeningPawn} owner={prize.OwnerPersistentId}");
+        Console.WriteLine($"  [{prize.TimeSeconds,7:0.0}s] prize={prize.PrizeTemplateId ?? "-"} success={prize.Success} ownerKey={prize.OwnerKey ?? "?"} pawn={prize.OpeningPawn} pos={(prize.HasPosition ? $"{prize.X:0},{prize.Y:0}" : "sin posición")}");
     }
 
     Console.WriteLine($"Partidas/jugadores: players={match.Players} local={match.LocalPlayerFound} modo={match.Mode} duración={match.LengthSeconds}s");

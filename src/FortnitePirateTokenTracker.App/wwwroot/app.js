@@ -119,7 +119,7 @@ function renderChests() {
 
   const unattributed = (state.report?.chests ?? []).filter((c) => !c.playerName).length;
   $('chestAttributionNote').textContent = unattributed > 0
-    ? `${unattributed} aperturas sin jugador atribuido: el lector oficial no expone el pawn que busca el cofre ni su posición, así que la atribución y las zonas quedan pendientes del lector extendido.`
+    ? `${unattributed} aperturas sin jugador atribuido: son cofres cuyo grupo replica la búsqueda con una clase del lector oficial que no expone el pawn ni la posición, así que no hay con qué casarlos.`
     : '';
 
   $('chestEmpty').hidden = chests.length > 0;

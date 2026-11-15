@@ -4,7 +4,7 @@ Herramienta local para Windows que analiza tus repeticiones de Fortnite (`.repla
 
 Lee únicamente los archivos de repetición que el propio juego genera en tu disco. No modifica Fortnite, no inyecta código, no lee memoria del proceso y no se conecta a Epic Games.
 
-> **Estado del proyecto:** hay una primera versión funcional: aplicación de consola + panel web local que ya analiza repeticiones reales, cuenta cofres con sus timestamps, cachea resultados y exporta CSV/JSON. La atribución de cada cofre a un jugador, sus coordenadas y la identificación del premio (Token) están pendientes de un lector extendido; el detalle está en [Implementación actual](#19-implementación-actual).
+> **Estado del proyecto:** aplicación de consola + panel web local que analiza repeticiones reales, cuenta cofres con timestamps, atribuye cada cofre a un jugador, calcula su zona y exporta CSV/JSON. La identificación del premio (Token) sigue pendiente de un lector extendido; el detalle está en [Implementación actual](#19-implementación-actual).
 
 ---
 
@@ -366,7 +366,7 @@ Las repeticiones contienen nombres de jugadores, identificadores de cuenta y pos
 
 ## 19. Implementación actual
 
-Arquitectura entregada:
+Arquitectura entregada (atribución por posición):
 
 ```text
 src/
@@ -388,12 +388,19 @@ No se parchea ni se redistribuye el parser: `CapturingReader` hereda de `Fortnit
 | Metadatos (jugadores, jugador local, duración) | Funciona (89 jugadores en la partida de prueba) |
 | Caché, CSV, `report.json` | Funciona |
 | Panel web, configuración y guía | Funciona |
-| Cosméticos por jugador (outfit, pico, mochila, coche) | Los campos existen en el parser, pero llegan **vacíos** en las repeticiones actuales |
-| Atribución cofre → jugador | Pendiente: el modelo no expone `SearchingPawn` |
-| Coordenadas del cofre | Pendiente: el contenedor no replica posición accesible |
+| Cosméticos por jugador (outfit, pico, mochila, coche) | Se leen del **pawn** (la versión actual ya no los replica en el `PlayerState`) |
+| Atribución cofre → jugador | Funciona: `SearchingPawn` → última posición del pawn → trayectoria del jugador con el reloj alineado |
+| Coordenadas del cofre | Funciona para los grupos tipados por este proyecto y para los que replican `Location` en el actor |
 | Identificación del premio / Token | Pendiente: la heurística por pickup está lista, sin ids de premio confirmados |
 
 ## 20. Hallazgos del volcado real (2026-11-15)
+
+Sobre la atribución de jugadores y zonas:
+
+- **`PlayerPawn.PlayerState` llega vacío** en las repeticiones actuales: el enlace pawn → `PlayerState` no existe, así que el nombre se obtiene cruzando trayectorias (`PlayerData.Locations`), no por identificador.
+- **Relojes distintos:** el frame del replay empieza en 0 y `ReplicatedWorldTimeSeconds` arranca en el reloj del servidor (~1100 s). El desfase se estima por partida casando la geometría de los cofres ya posicionados; sin ese ajuste la atribución por tiempo falla.
+- **Cofre escalonado genérico:** la ruta `Tiered_Chest_Athena` está registrada por la librería con una clase sin `SearchingPawn`; sustituir el grupo en el registro no cambia la instanciación porque el mapeo compilado del parser conserva el tipo original. Esos cofres quedan sin jugador ni zona salvo que el actor replique `Location`.
+- **Caché de cosméticos:** `PlayerData.Cosmetics` llega vacío; los cosméticos se leen de las propiedades del pawn (`Character`, `Backpack`, `Pickaxe`, `Glider`, `MusicPack`, `PetSkin`).
 
 Sondeo sobre repeticiones reales de la carpeta por defecto:
 
