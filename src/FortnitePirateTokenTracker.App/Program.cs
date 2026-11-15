@@ -213,7 +213,7 @@ var scanner = new SemaphoreSlim(1, 1);
         {
             config,
             report,
-            catalog = TreasureCatalog.Prizes.Select(p => new { p.Key, p.Label, p.Odds, p.Accent, p.Description }),
+            catalog = TreasureCatalog.Prizes.Select(p => new { p.Key, p.Label, p.Odds, p.Accent, p.Description, p.Image }),
             folderExists = Directory.Exists(config.ReplayFolder),
             replayCount = files,
             version = "0.2.0",

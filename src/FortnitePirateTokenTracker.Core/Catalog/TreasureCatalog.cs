@@ -7,26 +7,26 @@ namespace FortnitePirateTokenTracker.Core.Catalog;
 /// </summary>
 public static class TreasureCatalog
 {
-    public sealed record Prize(string Key, string Label, string Odds, string Accent, string Description);
+    public sealed record Prize(string Key, string Label, string Odds, string Accent, string Description, string Image);
 
     public static readonly IReadOnlyList<Prize> Prizes = new List<Prize>
     {
         new("outfit", "Skin semanal (Gold Outfit)", "1 en 1.562.500", "#ffd400",
-            "Traje dorado de la semana del evento."),
+            "Traje dorado de la semana del evento.", "outfit.webp"),
         new("shopAccess", "Acceso a la tienda pirata", "1 en 137.500", "#ff8a00",
-            "Acceso al catálogo del evento."),
+            "Acceso al catálogo del evento.", "shop.webp"),
         new("vehicle", "Vehículo y decal", "1 en 7.813", "#7b5cff",
-            "Vehículo o decal dorado de la semana."),
+            "Vehículo o decal dorado de la semana.", "vehicle.webp"),
         new("pickaxe", "Pico o mochila", "1 en 568", "#c86bff",
-            "Pico o back bling semanal."),
+            "Pico o back bling semanal.", "pickaxe.webp"),
         new("jamTrack", "Jam Track", "1 en 391", "#38c8ff",
-            "Pista musical desbloqueable."),
+            "Pista musical desbloqueable.", "jam.webp"),
         new("loadingScreen", "Pantalla de carga", "1 en 272", "#3ddc97",
-            "Pantalla de carga del evento."),
+            "Pantalla de carga del evento.", "loading.webp"),
         new("gizmo", "Gizmo (cualquiera)", "1 en 127", "#ff5d5d",
-            "Sprite/gizmo de extracción o localización."),
+            "Sprite/gizmo de extracción o localización.", "gizmo.webp"),
         new("token", "Token pirata", "—", "#ffffff",
-            "Ítem del evento que rastrea esta herramienta.")
+            "Ítem del evento que rastrea esta herramienta.", "token.webp")
     };
 
     public static Prize? ByKey(string key) =>

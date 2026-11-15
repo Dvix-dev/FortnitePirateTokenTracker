@@ -132,11 +132,11 @@ function renderChests() {
 
 function renderPrizes() {
   const found = new Map((state.report?.categories ?? []).map((c) => [c.key, c.found]));
-  const icons = { outfit: '★', shopAccess: '◉', vehicle: '▰', pickaxe: '⚔', jamTrack: '♪', loadingScreen: '▤', gizmo: '✦', token: '◈' };
-
   $('prizeList').innerHTML = state.catalog.map((prize) => `
     <div class="prize">
-      <div class="prize-thumb" style="background:linear-gradient(140deg, ${esc(prize.accent)}, ${esc(prize.accent)}99)">${esc(icons[prize.key] ?? '◈')}</div>
+      <div class="prize-thumb" style="background:linear-gradient(140deg, ${esc(prize.accent)}33, ${esc(prize.accent)}0d)">
+        <img src="/img/${esc(prize.image)}" alt="${esc(prize.label)}" loading="lazy">
+      </div>
       <div class="prize-body">
         <div class="prize-name">${esc(prize.label)}</div>
         <div class="prize-desc">${esc(prize.description)}</div>
