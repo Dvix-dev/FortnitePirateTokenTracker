@@ -399,7 +399,8 @@ Sondeo sobre repeticiones reales de la carpeta por defecto:
 
 - **Grupos de contenedor observados:** `Tiered_Chest_Athena`, `AlwaysSpawn_NormalChest`, `Tiered_Chest_5_Child`, `BGA_LootCannon_StandardChest_Pirate`, `BGA_ExtractionPointGameplay_Chest`, `BP_Container_WoodenCrates_*`. La librería solo tipa el primero; el resto aparece como grupo no leído.
 - **Pickups:** 1 939 en una partida de 20 MB (63 ids únicos), dominados por munición y armas (`WID_*`). Ningún id contenía `Token`/`Pirate`/`Gold` en las muestras.
-- **Volumen de aperturas:** 125 contenedores en una partida de 20 MB y 780 en tres partidas (~260 por partida).
+- **Volumen de aperturas:** 125 contenedores en una partida de 20 MB; el análisis completo de la carpeta da **10 196 aperturas en 99 repeticiones legibles** (~103 por partida).
+- **Repetición ilegible:** una de cada cien (`UnsavedReplay-2026.11.07-21.16.14`) aborta con `Replay is marked encrypted but not yet marked as completed!`: la partida no se terminó de escribir y el archivo no tiene clave. Se registra como error y el lote continúa.
 - **Modo Debug:** los grupos de cofre están marcados `minimalParseMode: Debug`; en modo `Minimal` no se leen. Se usa `Debug` con tolerancia a eventos desconocidos para no abortar el archivo.
 - **Tiempo del frame:** la propiedad `CurrentTimeSeconds` no es accesible en 3.1.0 (de ahí que los proyectos de la comunidad la parcheen). Se resuelve leyendo la cabecera del demo frame y restaurando la posición con `Seek` antes de delegar.
 
