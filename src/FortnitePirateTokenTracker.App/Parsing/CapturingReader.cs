@@ -20,6 +20,7 @@ public sealed class ContainerSnapshot
     public string? ItemId { get; set; }
     public string? SearchingPawn { get; set; }
     public string? OwnerKey { get; set; }
+    public bool Destroyed { get; set; }
     public double X { get; set; }
     public double Y { get; set; }
     public double Z { get; set; }
@@ -51,6 +52,10 @@ public sealed class PickupSnapshot
     public double TimeSeconds { get; set; }
     public string? ItemId { get; set; }
     public string? Raw { get; set; }
+    public double X { get; set; }
+    public double Y { get; set; }
+    public double Z { get; set; }
+    public bool HasPosition { get; set; }
 }
 
 /// <summary>
@@ -69,6 +74,15 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
     };
 
     private readonly Dictionary<uint, bool> _openedContainers = new();
+
+    /// <summary>Canales de cofre distintos vistos y cuántos llegaron a abrirse.</summary>
+    private readonly HashSet<uint> _chestChannels = new();
+    private readonly HashSet<uint> _openedChannels = new();
+    private readonly HashSet<uint> _destroyedChannels = new();
+
+    public int ChestChannels => _chestChannels.Count;
+    public int OpenedChannels => _openedChannels.Count;
+    public int DestroyedChannels => _destroyedChannels.Count;
 
     /// <summary>Pawn (NetGUID) → PlayerState (NetGUID).</summary>
     private readonly Dictionary<uint, uint?> _pawnToPlayerState = new();
@@ -201,7 +215,7 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
             }
             else if (exportGroup.GetType().Name.Contains("Pickup", StringComparison.OrdinalIgnoreCase))
             {
-                TrackPickup(exportGroup);
+                TrackPickup(channelIndex, exportGroup);
             }
         }
         catch (Exception ex)
@@ -436,11 +450,18 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
 
     private void TrackTrackedContainer(uint channelIndex, FortnitePirateTokenTracker.ReplayReader.ITrackedContainer container)
     {
+        _chestChannels.Add(channelIndex);
+        if (container.bDestroyed)
+        {
+            _destroyedChannels.Add(channelIndex);
+        }
+
         _openedContainers.TryGetValue(channelIndex, out var wasOpened);
 
         if (container.bAlreadySearched && !wasOpened)
         {
             _openedContainers[channelIndex] = true;
+            _openedChannels.Add(channelIndex);
 
             var (ownerKey, x, y, z, hasPosition) = ResolvePawn(container.SearchingPawn);
             if (!hasPosition && TryGetActorLocation(channelIndex, out var actorPosition))
@@ -462,6 +483,33 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
                 HasPosition = hasPosition
             });
         }
+        else if (container.bDestroyed && !wasOpened)
+        {
+            // Cofre destruido sin abrirse: también cuenta como apertura.
+            _openedContainers[channelIndex] = true;
+            _openedChannels.Add(channelIndex);
+
+            var (ownerKey, x, y, z, hasPosition) = ResolvePawn(container.SearchingPawn);
+            if (!hasPosition && TryGetActorLocation(channelIndex, out var actorPosition))
+            {
+                (x, y, z, hasPosition) = (actorPosition.X, actorPosition.Y, actorPosition.Z, true);
+            }
+
+            Containers.Add(new ContainerSnapshot
+            {
+                ClassName = container.GetType().Name + " (destruido)",
+                TimeSeconds = NowSeconds,
+                SearchAnimationCount = container.SearchAnimationCount,
+                LootTier = container.ReplicatedLootTier,
+                SearchingPawn = container.SearchingPawn?.ToString(CultureInfo.InvariantCulture),
+                OwnerKey = ownerKey,
+                X = x,
+                Y = y,
+                Z = z,
+                HasPosition = hasPosition,
+                Destroyed = true
+            });
+        }
         else if (!container.bAlreadySearched)
         {
             _openedContainers[channelIndex] = false;
@@ -470,6 +518,12 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
 
     private void TrackContainer(uint channelIndex, BaseContainer container)
     {
+        _chestChannels.Add(channelIndex);
+        if (container.bDestroyed)
+        {
+            _destroyedChannels.Add(channelIndex);
+        }
+
         var searched = container.bAlreadySearched;
         _openedContainers.TryGetValue(channelIndex, out var wasOpened);
 
@@ -477,6 +531,7 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         if (searched && !wasOpened)
         {
             _openedContainers[channelIndex] = true;
+            _openedChannels.Add(channelIndex);
 
             var pawnGuid = ReadProperty(container, "SearchingPawn") is { } raw
                            && uint.TryParse(raw.ToString(), out var parsed)
@@ -502,6 +557,26 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
                 Y = y,
                 Z = z,
                 HasPosition = hasPosition
+            });
+        }
+        else if (container.bDestroyed && !wasOpened)
+        {
+            _openedContainers[channelIndex] = true;
+            _openedChannels.Add(channelIndex);
+
+            var hasPosition = TryGetActorLocation(channelIndex, out var actorPosition);
+
+            Containers.Add(new ContainerSnapshot
+            {
+                ClassName = container.GetType().Name + " (destruido)",
+                TimeSeconds = NowSeconds,
+                SearchAnimationCount = container.SearchAnimationCount,
+                LootTier = container.ReplicatedLootTier,
+                X = hasPosition ? actorPosition.X : 0,
+                Y = hasPosition ? actorPosition.Y : 0,
+                Z = hasPosition ? actorPosition.Z : 0,
+                HasPosition = hasPosition,
+                Destroyed = true
             });
         }
         else if (!searched)
@@ -536,7 +611,7 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         });
     }
 
-    private void TrackPickup(INetFieldExportGroup exportGroup)
+    private void TrackPickup(uint channelIndex, INetFieldExportGroup exportGroup)
     {
         var itemId = ReadItemId(exportGroup);
         if (string.IsNullOrEmpty(itemId))
@@ -544,12 +619,18 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
             return;
         }
 
+        var hasPosition = TryGetActorLocation(channelIndex, out var position);
+
         Pickups.Add(new PickupSnapshot
         {
             ClassName = exportGroup.GetType().Name,
             TimeSeconds = NowSeconds,
             ItemId = itemId,
-            Raw = Describe(exportGroup)
+            Raw = Describe(exportGroup),
+            X = hasPosition ? position.X : 0,
+            Y = hasPosition ? position.Y : 0,
+            Z = hasPosition ? position.Z : 0,
+            HasPosition = hasPosition
         });
     }
 

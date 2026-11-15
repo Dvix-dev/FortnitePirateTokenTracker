@@ -72,6 +72,48 @@ public class BootyChest : TrackedContainer
 {
 }
 
+// Cofres y contenedores del evento que la librería no tipa: sin estas clases sus
+// aperturas no se cuentan en absoluto.
+[NetFieldExportGroup("/DelilahDynamicLevels/Gameplay/BGA_LootCannon_StandardChest_Pirate.BGA_LootCannon_StandardChest_Pirate_C")]
+public class PirateLootCannonChest : TrackedContainer
+{
+}
+
+[NetFieldExportGroup("/ExtractionPointGameplay/Gameplay/BGA_ExtractionPointGameplay_Chest.BGA_ExtractionPointGameplay_Chest_C")]
+public class ExtractionChest : TrackedContainer
+{
+}
+
+[NetFieldExportGroup("/ExtractionRelicFinder/Gameplay/Chests/Prop_Athena_BuriedChest_RelicFinder.Prop_Athena_BuriedChest_RelicFinder_C")]
+public class BuriedChestProp : TrackedContainer
+{
+}
+
+[NetFieldExportGroup("/ExtractionRelicFinder/Gameplay/Chests/B_Athena_BuriedChest_RelicFinder.B_Athena_BuriedChest_RelicFinder_C")]
+public class BuriedChestRelicFinder : TrackedContainer
+{
+}
+
+[NetFieldExportGroup("/Game/Athena/Items/ForagedItems/BuriedChest/B_Athena_BuriedChest_Chest.B_Athena_BuriedChest_Chest_C")]
+public class BuriedChest : TrackedContainer
+{
+}
+
+[NetFieldExportGroup("/Game/Building/ActorBlueprints/Containers/FoodBox_Produce_Athena.FoodBox_Produce_Athena_C")]
+public class ProduceBox : TrackedContainer
+{
+}
+
+[NetFieldExportGroup("/Hera/Props/Container/Container_WoodenCrates_A/Blueprints/BP_Container_WoodenCrates_B.BP_Container_WoodenCrates_B_C")]
+public class WoodenCrateB : TrackedContainer
+{
+}
+
+[NetFieldExportGroup("/Hera/Props/Container/Container_WoodenCrates_A/Blueprints/BP_Container_WoodenCrates_D.BP_Container_WoodenCrates_D_C")]
+public class WoodenCrateD : TrackedContainer
+{
+}
+
 /// <summary>
 /// Cofre dorado del evento de tesoro. Al abrirse replica el premio concedido
 /// (PrizeTemplateId), si se concedió (bSuccess) y quién lo abrió (OpeningPawn).

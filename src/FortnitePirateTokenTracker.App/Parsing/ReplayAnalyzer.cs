@@ -16,7 +16,7 @@ public sealed class ReplayAnalyzer
     private const string CacheFileName = "parsed-replays.json";
 
     /// <summary>Subir esto invalida la caché cuando cambian las reglas de detección.</summary>
-    private const string CurrentParserVersion = "9";
+    private const string CurrentParserVersion = "10";
 
     private readonly AppConfig _config;
     private readonly string _dataDir;
@@ -540,18 +540,52 @@ public sealed class ReplayAnalyzer
             return;
         }
 
+        var pickups = reader.Pickups.Where(p => p.HasPosition).ToList();
+
+        // El premio del cofre dorado también aparece como objeto recogible junto a él:
+        // si la etiqueta replicada no es utilizable, se toma el objeto que salió al lado.
+        string? RewardNear(double time, double x, double y, double z)
+        {
+            PickupSnapshot? best = null;
+            var bestDistance = 15.0 * 15.0;
+
+            foreach (var pickup in pickups)
+            {
+                if (Math.Abs(pickup.TimeSeconds - time) > 12 || !IsRewardItem(pickup.ItemId))
+                {
+                    continue;
+                }
+
+                var dx = pickup.X - x;
+                var dy = pickup.Y - y;
+                var dz = pickup.Z - z;
+                var distance = dx * dx + dy * dy + dz * dz;
+
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = pickup;
+                }
+            }
+
+            return best?.ItemId;
+        }
+
         foreach (var prize in reader.Prizes.OrderBy(p => p.TimeSeconds))
         {
             var (ownerName, isLocal) = Resolve(prize.OwnerKey, prize.TimeSeconds, prize.X, prize.Y, prize.Z, prize.HasPosition);
+
+            var prizeId = UsablePrizeTag(prize.PrizeTemplateId)
+                          ?? RewardNear(prize.TimeSeconds, prize.X, prize.Y, prize.Z);
 
             parsed.Chests.Add(new ParsedChest
             {
                 TimeMs = (int)Math.Round(prize.TimeSeconds * 1000),
                 ContainerClass = "Cofre dorado (tesoro)",
-                ItemId = prize.PrizeTemplateId,
-                IsToken = LooksLikeToken(prize.PrizeTemplateId),
-                Category = TreasureCatalog.ClassifyPrize(prize.PrizeTemplateId),
-                Confidence = string.IsNullOrWhiteSpace(prize.PrizeTemplateId) ? "B" : "A",
+                ItemId = prizeId,
+                IsToken = LooksLikeToken(prizeId),
+                Category = TreasureCatalog.ClassifyPrize(prizeId),
+                Confidence = string.IsNullOrWhiteSpace(prizeId) ? "B" : "A",
                 PlayerName = ownerName,
                 IsLocalPlayer = isLocal,
                 X = prize.X,
@@ -621,6 +655,31 @@ public sealed class ReplayAnalyzer
         long l => l,
         _ => double.TryParse(value.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0
     };
+
+    /// <summary>La etiqueta de premio replicada a veces trae basura de otro campo.</summary>
+    private static string? UsablePrizeTag(string? tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            return null;
+        }
+
+        var usable = tag.Contains("Cosmetic", StringComparison.OrdinalIgnoreCase)
+                     || tag.Contains("Delilah", StringComparison.OrdinalIgnoreCase)
+                     || tag.Contains("Treasure", StringComparison.OrdinalIgnoreCase)
+                     || tag.Contains("Token", StringComparison.OrdinalIgnoreCase)
+                     || tag.Contains("AGID", StringComparison.OrdinalIgnoreCase)
+                     || tag.StartsWith("Athena", StringComparison.OrdinalIgnoreCase);
+
+        return usable ? tag : null;
+    }
+
+    /// <summary>Descarta munición y armas: el premio del tesoro es cosmético u objeto del evento.</summary>
+    private static bool IsRewardItem(string? itemId) =>
+        !string.IsNullOrWhiteSpace(itemId)
+        && !itemId!.StartsWith("WID_", StringComparison.OrdinalIgnoreCase)
+        && !itemId.Contains("Ammo", StringComparison.OrdinalIgnoreCase)
+        && !itemId.Contains("Playset", StringComparison.OrdinalIgnoreCase);
 
     private static bool LooksLikeToken(string? itemId)
     {

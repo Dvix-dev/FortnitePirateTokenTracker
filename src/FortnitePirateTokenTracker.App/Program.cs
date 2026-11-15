@@ -89,6 +89,31 @@ if (command == "probe")
     Console.WriteLine($"Tiempo de parseo: {sw.ElapsedMilliseconds} ms");
 
     Console.WriteLine($"Posiciones de pawn: {reader.PawnPositions} · enlaces pawn→jugador: {reader.PawnLinks}");
+    Console.WriteLine("Rutas de cofre vistas:");
+    foreach (var (path, count) in reader.GroupPaths
+                 .Where(kv => kv.Key.Contains("Chest", StringComparison.OrdinalIgnoreCase)
+                              || kv.Key.Contains("Container", StringComparison.OrdinalIgnoreCase))
+                 .OrderByDescending(kv => kv.Value)
+                 .Take(15))
+    {
+        Console.WriteLine($"  {count,5}x lee={reader.WillReadGroup(path)} {path}");
+    }
+
+    Console.WriteLine($"Clases capturadas: {string.Join(", ", reader.Containers.GroupBy(c => c.ClassName).Select(g => $"{g.Key}={g.Count()}"))}");
+    foreach (var group in reader.Containers.GroupBy(c => c.ClassName))
+    {
+        var withPawn = group.Count(c => c.SearchingPawn is not null);
+        var withPos = group.Count(c => c.HasPosition);
+        Console.WriteLine($"  {group.Key}: {group.Count()} (pawn {withPawn}, posición {withPos})");
+    }
+
+    Console.WriteLine($"Canales de cofre: {reader.ChestChannels} · abiertos: {reader.OpenedChannels} · destruidos: {reader.DestroyedChannels}");
+    Console.WriteLine($"Pickups con posición: {reader.Pickups.Count(p => p.HasPosition)} de {reader.Pickups.Count}");
+    foreach (var c in match.Chests.Where(c => c.ContainerClass.Contains("dorado", StringComparison.OrdinalIgnoreCase)))
+    {
+        Console.WriteLine($"  premio [{c.TimeMs / 1000.0:0.0}s] item={c.ItemId ?? "-"} categoria={c.Category ?? "-"} jugador={c.PlayerName ?? "?"}");
+    }
+
     Console.WriteLine($"Cofres observados: {reader.Containers.Count}");
     foreach (var c in reader.Containers.Take(15))
     {

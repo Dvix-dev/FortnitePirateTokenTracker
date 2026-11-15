@@ -384,7 +384,7 @@ No se parchea ni se redistribuye el parser: `CapturingReader` hereda de `Fortnit
 | Área | Estado |
 |------|--------|
 | Lectura de `.replay` (Oodle + cifrado) | Funciona con `FortniteReplayReader` 3.1.0 |
-| Contenedores abiertos y timestamps | Funciona (`Tiered_Chest_Athena`, `AmmoBox`, …) |
+| Contenedores abiertos y timestamps | Funciona: aperturas, destrucciones y grupos que la librería no tipaba (cofres enterrados, cañón pirata, extracción, cajas de madera) |
 | Metadatos (jugadores, jugador local, duración) | Funciona (89 jugadores en la partida de prueba) |
 | Caché, CSV, `report.json` | Funciona |
 | Panel web, configuración y guía | Funciona |
@@ -401,6 +401,9 @@ Sobre la atribución de jugadores y zonas:
 - **Relojes distintos:** el frame del replay empieza en 0 y `ReplicatedWorldTimeSeconds` arranca en el reloj del servidor (~1100 s). El desfase se estima por partida casando la geometría de los cofres ya posicionados; sin ese ajuste la atribución por tiempo falla.
 - **Cofre escalonado genérico:** la ruta `Tiered_Chest_Athena` está registrada por la librería con una clase sin `SearchingPawn`; sustituir el grupo en el registro no cambia la instanciación porque el mapeo compilado del parser conserva el tipo original. Esos cofres quedan sin jugador ni zona salvo que el actor replique `Location`.
 - **Caché de cosméticos:** `PlayerData.Cosmetics` llega vacío; los cosméticos se leen de las propiedades del pawn (`Character`, `Backpack`, `Pickaxe`, `Glider`, `MusicPack`, `PetSkin`).
+- **Cofres destruidos:** `bAlreadySearched` no se marca cuando el cofre se rompe a golpes, así que se cuentan también las transiciones de `bDestroyed` (2.554 aperturas extra en 99 partidas).
+- **Grupos sin tipar:** `BGA_LootCannon_StandardChest_Pirate`, `BGA_ExtractionPointGameplay_Chest`, los cofres enterrados, `FoodBox_Produce_Athena` y `BP_Container_WoodenCrates_*` no los leía nadie; con clases propias sus aperturas pasan a contarse (16.330 → 19.391 cofres).
+- **Premio del cofre dorado:** el grupo declara `PrizeTemplateId` en dos handles (48 y 49) con el mismo nombre y el parser fusiona por nombre, así que el valor sale de otro campo. Se filtra esa etiqueta inservible y se intenta identificar el objeto por los pickups cercanos en tiempo (12 s) y espacio (15 m).
 
 Sondeo sobre repeticiones reales de la carpeta por defecto:
 
