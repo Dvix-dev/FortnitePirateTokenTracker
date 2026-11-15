@@ -16,7 +16,7 @@ public sealed class ReplayAnalyzer
     private const string CacheFileName = "parsed-replays.json";
 
     /// <summary>Subir esto invalida la caché cuando cambian las reglas de detección.</summary>
-    private const string CurrentParserVersion = "17";
+    private const string CurrentParserVersion = "18";
 
     private readonly AppConfig _config;
     private readonly string _dataDir;
@@ -33,6 +33,15 @@ public sealed class ReplayAnalyzer
 
     public Action<string>? Log { get; set; }
 
+    /// <summary>
+    /// Modo de parseo. Debug lee todos los grupos (también los que no usamos) y multiplica el
+    /// tiempo; TT_PARSE_MODE=Normal lo limita a los grupos normales para analizar rápido.
+    /// </summary>
+    public static ParseMode ParseModeFromEnvironment() =>
+        Enum.TryParse<ParseMode>(Environment.GetEnvironmentVariable("TT_PARSE_MODE"), true, out var mode)
+            ? mode
+            : ParseMode.Debug;
+
     public List<string> ListReplays()
     {
         if (!Directory.Exists(_config.ReplayFolder))
@@ -45,6 +54,10 @@ public sealed class ReplayAnalyzer
             .ToList();
     }
 
+    /// <summary>
+    /// Analiza las repeticiones nuevas y devuelve TODO lo guardado: lo analizado ahora, lo que
+    /// ya estaba en memoria y lo de repeticiones que Fortnite ya borró. Nada se elimina.
+    /// </summary>
     public (List<ParsedMatch> Matches, int FromCache, int Errors) AnalyzeAll(int? limit, bool force)
     {
         var files = ListReplays();
@@ -53,7 +66,7 @@ public sealed class ReplayAnalyzer
             files = files.Take(limit.Value).ToList();
         }
 
-        var matches = new List<ParsedMatch>();
+        var onDisk = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var fromCache = 0;
         var errors = 0;
 
@@ -61,35 +74,66 @@ public sealed class ReplayAnalyzer
         {
             var info = new FileInfo(file);
             var key = Path.GetFileName(file);
+            onDisk.Add(key);
 
-            if (!force && _cache.Entries.TryGetValue(key, out var cached)
-                && cached.Size == info.Length
-                && cached.LastWriteTicks == info.LastWriteTimeUtc.Ticks
-                && cached.Match is not null)
+            _cache.Entries.TryGetValue(key, out var previous);
+
+            if (!force && previous is not null
+                && !string.IsNullOrEmpty(previous.ParserVersion)
+                && previous.ParserVersion == CurrentParserVersion
+                && previous.Size == info.Length
+                && previous.LastWriteTicks == info.LastWriteTimeUtc.Ticks
+                && previous.Match is not null)
             {
                 fromCache++;
-                matches.Add(cached.Match);
-                Log?.Invoke($"= {key} (caché)");
+                Log?.Invoke($"= {key} (memoria)");
                 continue;
             }
 
             Log?.Invoke($"> {key}");
             var parsed = AnalyzeFile(file);
+
             if (parsed.Error is not null)
             {
                 errors++;
+
+                // Un análisis fallido no debe borrar uno bueno: se conserva el anterior.
+                if (previous?.Match is not null && previous.Match.Error is null)
+                {
+                    previous.LastError = parsed.Error;
+                    previous.LastAttemptUtc = DateTimeOffset.UtcNow;
+                    Log?.Invoke($"  ! {key}: se conserva lo anterior ({parsed.Error})");
+                    continue;
+                }
             }
 
-            matches.Add(parsed);
             _cache.Entries[key] = new CacheEntry
             {
                 Size = info.Length,
                 LastWriteTicks = info.LastWriteTimeUtc.Ticks,
+                ParserVersion = CurrentParserVersion,
+                LastAttemptUtc = DateTimeOffset.UtcNow,
+                LastError = parsed.Error,
                 Match = parsed
             };
         }
 
         SaveCache();
+
+        var archived = _cache.Entries.Count(e => e.Value.Match is not null && !onDisk.Contains(e.Key));
+        if (archived > 0)
+        {
+            Log?.Invoke($"+ {archived} repeticiones guardadas de partidas ya borradas del disco");
+        }
+
+        var matches = _cache.Entries
+            .Where(e => e.Value.Match is not null)
+            .Select(e => e.Value.Match!)
+            .GroupBy(m => m.ReplayFile, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .OrderByDescending(m => m.PlayedAt ?? DateTimeOffset.MinValue)
+            .ToList();
+
         return (matches, fromCache, errors);
     }
 
@@ -102,7 +146,7 @@ public sealed class ReplayAnalyzer
             PlayedAt = ParseDateFromName(file)
         };
 
-        var reader = new CapturingReader(ParseMode.Debug);
+        var reader = new CapturingReader(ParseModeFromEnvironment());
         FortniteReplay? replay = null;
         var playersByKey = new Dictionary<string, (string Name, bool IsLocal)>(StringComparer.Ordinal);
         var tracks = new List<PlayerTrack>();
@@ -804,14 +848,9 @@ public sealed class ReplayAnalyzer
             if (File.Exists(_cachePath))
             {
                 var json = File.ReadAllText(_cachePath);
-                var cache = JsonSerializer.Deserialize<CacheFile>(json, AppConfig.SerializerOptions) ?? new CacheFile();
-                if (cache.ParserVersion != CurrentParserVersion)
-                {
-                    // Cambiaron las reglas: se descarta lo cacheado para no servir datos viejos.
-                    return new CacheFile { ParserVersion = CurrentParserVersion };
-                }
-
-                return cache;
+                // La memoria es permanente: aunque cambien las reglas, lo guardado se conserva.
+                // Cada entrada se reanaliza por separado cuando su versión es antigua.
+                return JsonSerializer.Deserialize<CacheFile>(json, AppConfig.SerializerOptions) ?? new CacheFile();
             }
         }
         catch
@@ -837,7 +876,7 @@ public sealed class ReplayAnalyzer
 
     private sealed class CacheFile
     {
-        public int SchemaVersion { get; set; } = 1;
+        public int SchemaVersion { get; set; } = 2;
         public string ParserVersion { get; set; } = CurrentParserVersion;
         public Dictionary<string, CacheEntry> Entries { get; set; } = new();
     }
@@ -846,6 +885,15 @@ public sealed class ReplayAnalyzer
     {
         public long Size { get; set; }
         public long LastWriteTicks { get; set; }
+
+        /// <summary>
+        /// Versión de reglas con la que se analizó esta repetición. Vacía = entrada antigua sin
+        /// versión: se reanaliza cuando el archivo siga en disco.
+        /// </summary>
+        public string ParserVersion { get; set; } = "";
+
+        public DateTimeOffset? LastAttemptUtc { get; set; }
+        public string? LastError { get; set; }
         public ParsedMatch? Match { get; set; }
     }
 }
