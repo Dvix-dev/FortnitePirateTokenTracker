@@ -145,8 +145,12 @@ public sealed class ReplayAnalyzer
         return (matches, fromCache, errors);
     }
 
+    /// <summary>Repite la lectura con la vía cruda de habilidades (muy lenta).</summary>
+    public bool AbilityProbe { get; set; }
+
     public ParsedMatch AnalyzeFile(string file)
     {
+        var abilityProbe = AbilityProbe;
         var parsed = new ParsedMatch
         {
             ReplayFile = Path.GetFileName(file),
@@ -181,6 +185,30 @@ public sealed class ReplayAnalyzer
         catch (Exception ex)
         {
             parsed.Error = $"{ex.GetType().Name}: {ex.Message}";
+        }
+
+        // Si en la partida se concedió un tesoro, se repite la lectura habilitando la vía
+        // cruda de las habilidades: así se sabe quién lo recibió (y a veces qué premio es).
+        if (reader.TreasureHandlerClasses.Any()
+            && (abilityProbe || Environment.GetEnvironmentVariable("TT_DEEP_TREASURE") == "1"))
+        {
+            try
+            {
+                var profundo = new CapturingReader(ParseMode.Debug, abilityProbe: true);
+                using var stream2 = new FileStream(
+                    file, FileMode.Open, FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete);
+                profundo.ReadReplay(stream2);
+
+                foreach (var prize in profundo.Prizes.Where(p => p.Source == "habilidad" && p.OwnerPersistentId is not null))
+                {
+                    reader.Prizes.Add(prize);
+                }
+            }
+            catch (Exception ex)
+            {
+                parsed.Warnings.Add($"Tesoro: {ex.GetType().Name}: {ex.Message}");
+            }
         }
 
         parsed.Warnings.AddRange(reader.Warnings.Distinct().Take(25));

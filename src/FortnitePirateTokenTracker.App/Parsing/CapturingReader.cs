@@ -132,14 +132,14 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         "[A-Za-z][A-Za-z0-9_]*:[A-Za-z0-9_.\\-]+|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
         System.Text.RegularExpressions.RegexOptions.Compiled);
 
-    public CapturingReader(ParseMode mode) : base(null, mode)
+    public CapturingReader(ParseMode mode, bool abilityProbe = false) : base(null, mode)
     {
         // Las habilidades del jugador no las decodifica la librería (sus campos no llevan
         // nombre exportado). RawProbe entrega sus bits en crudo y aquí se busca qué
         // habilidad de premio se concedió y cuándo.
         // Desactivado por defecto: interceptar los bits de la lista de habilidades multiplica
         // por diez el tiempo de análisis. Se activa con TT_ABILITY_PROBE=1 para depurar.
-        if (Environment.GetEnvironmentVariable("TT_ABILITY_PROBE") == "1")
+        if (abilityProbe || Environment.GetEnvironmentVariable("TT_ABILITY_PROBE") == "1")
         {
         RawProbe.Filter = path => path.Contains("FortAbilitySystemComponent", StringComparison.Ordinal);
         RawProbe.Sink = (channel, group, field, data, bits) =>
@@ -375,6 +375,10 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         }
     }
 
+    private int _abilityDeltas;
+
+    public int AbilityDeltas => _abilityDeltas;
+
     protected override void OnNetDeltaRead(uint channelIndex, NetDeltaUpdate update)
     {
         try
@@ -385,6 +389,48 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         {
             Warnings.Add($"OnNetDeltaRead: {ex.Message}");
         }
+
+        // Cada habilidad concedida llega como un elemento de la lista, con su dueño:
+        // si esa habilidad es de premio, sabemos quién recibió el tesoro y cuándo.
+        if (update.Export is not GrantedAbility ability || update.Deleted)
+        {
+            return;
+        }
+
+        _abilityDeltas++;
+
+        if (ability.Ability is not uint guid || !_treasureHandlerGuids.TryGetValue(guid, out var handler))
+        {
+            return;
+        }
+
+        uint? owner = ability.OwnerActor
+                      ?? (channelIndex < Channels.Length ? Channels[channelIndex]?.ActorId : null);
+
+        if (owner is null)
+        {
+            return;
+        }
+
+        _playerStateKeys.TryGetValue(owner.Value, out var ownerKey);
+
+        if (Prizes.Any(p => p.Source == "habilidad" && p.OwnerPersistentId == owner && p.TierData == handler))
+        {
+            return;
+        }
+
+        _abilityGrants++;
+        Prizes.Add(new PrizeEvent
+        {
+            TimeSeconds = NowSeconds,
+            TierData = handler,
+            Success = true,
+            OpeningPawn = ability.AvatarActor ?? owner,
+            OwnerPersistentId = owner,
+            OwnerKey = ownerKey,
+            ClassName = "GA_TreasureHandler",
+            Source = "habilidad"
+        });
     }
 
     /// <summary>

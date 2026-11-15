@@ -107,7 +107,7 @@ if (command == "probe")
         Console.WriteLine($"[captura] llamadas={reader.CaptureCalls} ms={reader.CaptureMilliseconds:0}");
     }
 
-    Console.WriteLine($"Habilidades: payloads={reader.AbilityPayloads} premios={reader.AbilityGrants} clases=[{string.Join(", ", reader.TreasureHandlerClasses)}]");
+    Console.WriteLine($"Habilidades: payloads={reader.AbilityPayloads} deltas={reader.AbilityDeltas} premios={reader.AbilityGrants} clases=[{string.Join(", ", reader.TreasureHandlerClasses)}]");
 
     Console.WriteLine("Grupos de habilidades:");
     foreach (var (path, count) in reader.GroupPaths
