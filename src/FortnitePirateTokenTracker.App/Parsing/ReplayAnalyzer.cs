@@ -16,7 +16,7 @@ public sealed class ReplayAnalyzer
     private const string CacheFileName = "parsed-replays.json";
 
     /// <summary>Subir esto invalida la caché cuando cambian las reglas de detección.</summary>
-    private const string CurrentParserVersion = "10";
+    private const string CurrentParserVersion = "15";
 
     private readonly AppConfig _config;
     private readonly string _dataDir;
@@ -123,7 +123,7 @@ public sealed class ReplayAnalyzer
         {
             try
             {
-                FillFromReplay(parsed, replay, playersByKey, tracks);
+                FillFromReplay(parsed, replay, reader, playersByKey, tracks);
             }
             catch (Exception ex)
             {
@@ -402,17 +402,26 @@ public sealed class ReplayAnalyzer
         private static long Key(long cx, long cy) => cx * 1_000_003L + cy;
     }
 
-    private void FillFromReplay(ParsedMatch parsed, FortniteReplay replay,
+    private void FillFromReplay(ParsedMatch parsed, FortniteReplay replay, CapturingReader reader,
         Dictionary<string, (string Name, bool IsLocal)> playersByKey, List<PlayerTrack> tracks)
     {
         var players = replay.PlayerData?.ToList() ?? new List<PlayerData>();
+
+        // El dueño de la repetición solo se marca si llega RecorderPlayerState. Cuando no,
+        // se resuelve el id del grabador con el mapa de PlayerStates capturado.
+        var recorderKey = replay.GameData?.RecorderId is uint recorderId
+            ? reader.PlayerStateKey(recorderId)
+            : null;
         parsed.Players = players.Count;
         parsed.Mode = DetectMode(replay);
         parsed.LengthSeconds = DetectLength(replay);
 
         foreach (var player in players)
         {
-            if (player.IsReplayOwner)
+            var isLocal = player.IsReplayOwner
+                          || (recorderKey is not null && player.Id?.ToString(CultureInfo.InvariantCulture) == recorderKey);
+
+            if (isLocal)
             {
                 parsed.LocalPlayerFound = true;
             }
@@ -424,9 +433,9 @@ public sealed class ReplayAnalyzer
             // el PlayerId. Con ese id se llega al nombre del jugador.
             void IndexPlayer(string? key)
             {
-                if (!string.IsNullOrWhiteSpace(key) && !playersByKey.ContainsKey(key))
+                if (!string.IsNullOrWhiteSpace(key))
                 {
-                    playersByKey[key] = (name, player.IsReplayOwner);
+                    playersByKey[key] = (name, isLocal);
                 }
             }
 
@@ -434,14 +443,14 @@ public sealed class ReplayAnalyzer
             IndexPlayer(player.PlayerNumber?.ToString(CultureInfo.InvariantCulture));
             IndexPlayer(player.EpicId);
 
-            AddCosmetic(parsed, name, player.IsReplayOwner, "outfit", player.Cosmetics?.Character);
-            AddCosmetic(parsed, name, player.IsReplayOwner, "pickaxe", player.Cosmetics?.Pickaxe);
-            AddCosmetic(parsed, name, player.IsReplayOwner, "backBling", player.Cosmetics?.Backpack);
-            AddCosmetic(parsed, name, player.IsReplayOwner, "glider", player.Cosmetics?.Glider);
-            AddCosmetic(parsed, name, player.IsReplayOwner, "loadingScreen", player.Cosmetics?.LoadingScreen);
-            AddCosmetic(parsed, name, player.IsReplayOwner, "musicPack", player.Cosmetics?.MusicPack);
-            AddCosmetic(parsed, name, player.IsReplayOwner, "pet", player.Cosmetics?.PetSkin);
-            AddCosmetic(parsed, name, player.IsReplayOwner, "wrap", player.Cosmetics?.ItemWraps?.FirstOrDefault());
+            AddCosmetic(parsed, name, isLocal, "outfit", player.Cosmetics?.Character);
+            AddCosmetic(parsed, name, isLocal, "pickaxe", player.Cosmetics?.Pickaxe);
+            AddCosmetic(parsed, name, isLocal, "backBling", player.Cosmetics?.Backpack);
+            AddCosmetic(parsed, name, isLocal, "glider", player.Cosmetics?.Glider);
+            AddCosmetic(parsed, name, isLocal, "loadingScreen", player.Cosmetics?.LoadingScreen);
+            AddCosmetic(parsed, name, isLocal, "musicPack", player.Cosmetics?.MusicPack);
+            AddCosmetic(parsed, name, isLocal, "pet", player.Cosmetics?.PetSkin);
+            AddCosmetic(parsed, name, isLocal, "wrap", player.Cosmetics?.ItemWraps?.FirstOrDefault());
 
             var samples = new List<(double T, double X, double Y, double Z)>();
             foreach (var movement in player.Locations ?? new List<PlayerMovement>())
@@ -466,7 +475,7 @@ public sealed class ReplayAnalyzer
             if (samples.Count > 0)
             {
                 samples.Sort((a, b) => a.T.CompareTo(b.T));
-                tracks.Add(new PlayerTrack(name, player.IsReplayOwner, samples));
+                tracks.Add(new PlayerTrack(name, isLocal, samples));
             }
         }
     }
@@ -509,7 +518,8 @@ public sealed class ReplayAnalyzer
 
             // Sin enlace directo pawn→PlayerState se atribuye cruzando la posición del
             // pawn que abre con la trayectoria replicada de cada jugador en ese instante.
-            return players.MatchTimed(time, x, y, z, offset);
+            var timed = players.MatchTimed(time, x, y, z, offset);
+            return timed.Name is not null ? timed : players.Match(x, y, z);
         }
 
         foreach (var container in reader.Containers.OrderBy(c => c.TimeSeconds))

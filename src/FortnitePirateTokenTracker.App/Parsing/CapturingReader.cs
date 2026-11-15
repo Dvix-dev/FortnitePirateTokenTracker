@@ -112,6 +112,71 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
 
     public CapturingReader(ParseMode mode) : base(null, mode)
     {
+        PromoteGroup(
+            "/Game/Building/ActorBlueprints/Containers/Tiered_Chest_Athena.Tiered_Chest_Athena_C",
+            "/Tokenizer/TieredChestAthena");
+        PromoteGroup(
+            "/Game/Building/ActorBlueprints/Containers/Tiered_Ammo_Athena.Tiered_Ammo_Athena_C",
+            "/Tokenizer/TieredAmmoAthena");
+    }
+
+    /// <summary>
+    /// El cofre escalonado es el más común y su clase oficial no declara SearchingPawn, así
+    /// que no se sabe quién lo abre ni dónde está. El parser instancia una sola vez cada
+    /// grupo en su constructor, por lo que hay que sustituir el tipo, los campos y la
+    /// instancia compartida del grupo registrado por los de nuestra clase.
+    /// </summary>
+    private void PromoteGroup(string realPath, string aliasPath)
+    {
+        try
+        {
+            var parserType = _netFieldParser.GetType();
+            var groups = parserType
+                .GetField("NetFieldGroups", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .GetValue(_netFieldParser)!;
+            var groupsType = groups.GetType();
+            var infoType = groupsType.GetGenericArguments().Last();
+            var tryGet = groupsType.GetMethod("TryGetValue", new[] { typeof(string), infoType.MakeByRefType() })!;
+
+            object? Get(string path)
+            {
+                var args = new object?[] { path, null };
+                return (bool)tryGet.Invoke(groups, args)! ? args[1] : null;
+            }
+
+            var real = Get(realPath);
+            var alias = Get(aliasPath);
+            if (real is null || alias is null)
+            {
+                Warnings.Add($"No se encontró el grupo {realPath} para promoverlo.");
+                return;
+            }
+
+            var promoteType = (Type)infoType.GetProperty("Type")!.GetValue(alias)!;
+            var promoteProperties = infoType.GetProperty("Properties")!.GetValue(alias);
+            var typeId = (int)infoType.GetProperty("TypeId")!.GetValue(real)!;
+
+            infoType.GetField("<Type>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .SetValue(real, promoteType);
+            infoType.GetProperty("Properties")!.SetValue(real, promoteProperties);
+
+            // Instancia compartida del grupo: se recrea con la clase nueva.
+            var objects = (Array)parserType
+                .GetField("_objects", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .GetValue(_netFieldParser)!;
+            var entry = objects.GetValue(typeId)!;
+            entry.GetType().GetProperty("Instance", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .SetValue(entry, Activator.CreateInstance(promoteType));
+
+            var changed = (System.Collections.IList)entry.GetType()
+                .GetProperty("ChangedProperties", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .GetValue(entry)!;
+            changed.Clear();
+        }
+        catch (Exception ex)
+        {
+            Warnings.Add($"Promoción de {realPath}: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     public List<ContainerSnapshot> Containers { get; } = new();
@@ -136,6 +201,10 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
 
     /// <summary>Nombre y tipo declarado de cada campo, para elegir el lector correcto.</summary>
     public Dictionary<string, List<string>> GroupFieldDetails { get; } = new();
+
+    /// <summary>Clave de jugador (PlayerId) a partir del actor de su PlayerState.</summary>
+    public string? PlayerStateKey(uint actorGuid) =>
+        _playerStateKeys.TryGetValue(actorGuid, out var key) ? key : null;
 
     public int PawnLinks => _pawnToPlayerState.Count;
     public int PlayerStateKeys => _playerStateKeys.Count;

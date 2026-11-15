@@ -37,6 +37,21 @@ public abstract class TrackedContainer : ITrackedContainer
     public bool bDestroyed { get; set; }
 }
 
+// El lector oficial registra la ruta del cofre escalonado con una clase que no declara
+// SearchingPawn. Se declara aquí bajo un alias y el lector promueve el grupo real a esta
+// clase al construirse (tipo, campos e instancia compartida del parser).
+[NetFieldExportGroup("/Tokenizer/TieredChestAthena")]
+public class TieredChestAthena : FortniteReplayReader.Models.NetFieldExports.Items.Chest, ITrackedContainer
+{
+    [NetFieldExport("SearchingPawn", RepLayoutCmdType.PropertyObject)]
+    public uint? SearchingPawn { get; set; }
+}
+
+[NetFieldExportGroup("/Tokenizer/TieredAmmoAthena")]
+public class TieredAmmoAthena : TrackedContainer
+{
+}
+
 [NetFieldExportGroup("/Game/Building/ActorBlueprints/Containers/AlwaysSpawn_NormalChest.AlwaysSpawn_NormalChest_C")]
 public class NormalChest : TrackedContainer
 {
@@ -117,6 +132,11 @@ public class WoodenCrateD : TrackedContainer
 /// <summary>
 /// Cofre dorado del evento de tesoro. Al abrirse replica el premio concedido
 /// (PrizeTemplateId), si se concedió (bSuccess) y quién lo abrió (OpeningPawn).
+/// </summary>
+/// <summary>
+/// Cofre dorado del evento. El grupo declara PrizeTemplateId en DOS handles (48 y 49) con el
+/// mismo nombre y el parser lo indexa por nombre, así que se lee el valor del campo
+/// equivocado. Aquí se declaran por handle para poder leer ambos y quedarse con el bueno.
 /// </summary>
 [NetFieldExportGroup("/DelilahTreasureHuntGameplay/Gameplay/Actors/BGA_DelilahTreasureHuntAnimatedChest.BGA_DelilahTreasureHuntAnimatedChest_C")]
 public class TreasureHuntChest : INetFieldExportGroup
