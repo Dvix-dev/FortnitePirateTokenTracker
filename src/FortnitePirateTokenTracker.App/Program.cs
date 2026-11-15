@@ -99,6 +99,22 @@ if (command == "probe")
         Console.WriteLine($"  {count,5}x lee={reader.WillReadGroup(path)} {path}");
     }
 
+    Console.WriteLine("Tags de premio en caché:");
+    foreach (var tag in reader.InterestingTags().Take(20))
+    {
+        Console.WriteLine($"  {tag}");
+    }
+
+    Console.WriteLine("Grupos con posible premio:");
+    foreach (var (path, fields) in reader.GroupFields
+                 .Where(kv => new[] { "Delilah", "Treasure", "Reward", "Gift", "Cosmetic", "Vehicle", "Prize", "Locker" }
+                     .Any(k => kv.Key.Contains(k, StringComparison.OrdinalIgnoreCase)))
+                 .OrderBy(kv => kv.Key)
+                 .Take(25))
+    {
+        Console.WriteLine($"  {path}\n     -> {string.Join(", ", fields.Take(14))}");
+    }
+
     Console.WriteLine($"Clases capturadas: {string.Join(", ", reader.Containers.GroupBy(c => c.ClassName).Select(g => $"{g.Key}={g.Count()}"))}");
     foreach (var group in reader.Containers.GroupBy(c => c.ClassName))
     {
@@ -173,7 +189,7 @@ if (command == "probe")
     Console.WriteLine($"Cofres dorados del evento: {reader.Prizes.Count}");
     foreach (var prize in reader.Prizes)
     {
-        Console.WriteLine($"  [{prize.TimeSeconds,7:0.0}s] prize={prize.PrizeTemplateId ?? "-"} success={prize.Success} ownerKey={prize.OwnerKey ?? "?"} pawn={prize.OpeningPawn} pos={(prize.HasPosition ? $"{prize.X:0},{prize.Y:0}" : "sin posición")}");
+        Console.WriteLine($"  [{prize.TimeSeconds,7:0.0}s] prize={prize.PrizeTemplateId ?? "-"} tags=[{prize.TierData}] success={prize.Success} ownerKey={prize.OwnerKey ?? "?"} pawn={prize.OpeningPawn} pos={(prize.HasPosition ? $"{prize.X:0},{prize.Y:0}" : "sin posición")}");
     }
 
     Console.WriteLine($"Partidas/jugadores: players={match.Players} local={match.LocalPlayerFound} modo={match.Mode} duración={match.LengthSeconds}s");

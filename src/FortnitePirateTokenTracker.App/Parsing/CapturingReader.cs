@@ -70,7 +70,8 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
 
     private static readonly string[] InterestingKeywords =
     {
-        "Chest", "Container", "Pickup", "Treasure", "Prize", "Gold", "Token", "Pirate", "Loot", "Reward"
+        "Chest", "Container", "Pickup", "Treasure", "Prize", "Gold", "Token", "Pirate", "Loot", "Reward",
+        "Cosmetic", "Vehicle", "Gift", "Delilah", "Inventory", "Locker", "Unlock", "Entitlement"
     };
 
     private readonly Dictionary<uint, bool> _openedContainers = new();
@@ -201,6 +202,33 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
 
     /// <summary>Nombre y tipo declarado de cada campo, para elegir el lector correcto.</summary>
     public Dictionary<string, List<string>> GroupFieldDetails { get; } = new();
+
+    /// <summary>Nombres de tag de la caché que huelen a premio, con su índice.</summary>
+    public IEnumerable<string> InterestingTags()
+    {
+        var cache = _netFieldParser.GetType()
+            .GetField("GuidCache", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(_netFieldParser)!;
+
+        string[] keys = { "Delilah", "Treasure", "Prize", "Reward", "Gizmo", "Car", "Vehicle", "LilUzi" };
+
+        foreach (var field in cache.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+        {
+            if (field.GetValue(cache) is not System.Collections.IDictionary dictionary)
+            {
+                continue;
+            }
+
+            foreach (System.Collections.DictionaryEntry entry in dictionary)
+            {
+                var value = entry.Value?.ToString() ?? "";
+                if (keys.Any(k => value.Contains(k, StringComparison.OrdinalIgnoreCase)))
+                {
+                    yield return $"{entry.Key} -> {value}";
+                }
+            }
+        }
+    }
 
     /// <summary>Clave de jugador (PlayerId) a partir del actor de su PlayerState.</summary>
     public string? PlayerStateKey(uint actorGuid) =>
@@ -665,12 +693,14 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         Prizes.Add(new PrizeEvent
         {
             TimeSeconds = NowSeconds,
-            PrizeTemplateId = ReadTag(prizeChest.PrizeTemplateId),
+            // La etiqueta de premio se declara dos veces (handles 48 y 49); se prueba la
+            // primera y, si no sirve, la segunda.
+            PrizeTemplateId = ReadTag(prizeChest.Prize48) ?? ReadTag(prizeChest.Prize49),
+            TierData = ReadTag(prizeChest.TierData),
             Success = prizeChest.bSuccess,
             Tier = prizeChest.Tier,
             OpeningPawn = prizeChest.OpeningPawn,
             OwnerPersistentId = prizeChest.OwnerPersistentId,
-            TierData = ReadTag(prizeChest.TierData),
             OwnerKey = ownerKey,
             X = x,
             Y = y,

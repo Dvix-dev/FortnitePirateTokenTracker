@@ -141,27 +141,42 @@ public class WoodenCrateD : TrackedContainer
 [NetFieldExportGroup("/DelilahTreasureHuntGameplay/Gameplay/Actors/BGA_DelilahTreasureHuntAnimatedChest.BGA_DelilahTreasureHuntAnimatedChest_C")]
 public class TreasureHuntChest : INetFieldExportGroup
 {
-    [NetFieldExport("PrizeTemplateId", RepLayoutCmdType.Property)]
-    public FGameplayTag PrizeTemplateId { get; set; }
+    [NetFieldExportHandle(4, RepLayoutCmdType.Ignore)]
+    public object RemoteRole { get; set; }
 
-    [NetFieldExport("bSuccess", RepLayoutCmdType.PropertyBool)]
-    public bool bSuccess { get; set; }
+    [NetFieldExportHandle(13, RepLayoutCmdType.Ignore)]
+    public object Role { get; set; }
 
-    [NetFieldExport("Tier", RepLayoutCmdType.PropertyInt)]
-    public int? Tier { get; set; }
+    [NetFieldExportHandle(14, RepLayoutCmdType.PropertyObject)]
+    public uint? Instigator { get; set; }
 
-    [NetFieldExport("TierData", RepLayoutCmdType.Property)]
-    public FGameplayTag TierData { get; set; }
-
-    [NetFieldExport("OwnerPersistentID", RepLayoutCmdType.PropertyObject)]
+    [NetFieldExportHandle(15, RepLayoutCmdType.PropertyObject)]
     public uint? OwnerPersistentId { get; set; }
 
-    [NetFieldExport("OpeningPawn", RepLayoutCmdType.PropertyObject)]
-    public uint? OpeningPawn { get; set; }
+    [NetFieldExportHandle(28, RepLayoutCmdType.PropertyBool)]
+    public bool bDestroyed { get; set; }
 
-    [NetFieldExport("SourceContainer", RepLayoutCmdType.PropertyObject)]
+    [NetFieldExportHandle(31, RepLayoutCmdType.PropertyBool)]
+    public bool bInstantDeath { get; set; }
+
+    [NetFieldExportHandle(44, RepLayoutCmdType.PropertyObject)]
     public uint? SourceContainer { get; set; }
 
-    [NetFieldExport("bDestroyed", RepLayoutCmdType.PropertyBool)]
-    public bool bDestroyed { get; set; }
+    [NetFieldExportHandle(45, RepLayoutCmdType.PropertyObject)]
+    public uint? OpeningPawn { get; set; }
+
+    [NetFieldExportHandle(46, RepLayoutCmdType.PropertyBool)]
+    public bool bSuccess { get; set; }
+
+    [NetFieldExportHandle(48, RepLayoutCmdType.Property)]
+    public FGameplayTag Prize48 { get; set; }
+
+    [NetFieldExportHandle(49, RepLayoutCmdType.Property)]
+    public FGameplayTag Prize49 { get; set; }
+
+    [NetFieldExportHandle(54, RepLayoutCmdType.PropertyInt)]
+    public int? Tier { get; set; }
+
+    [NetFieldExportHandle(55, RepLayoutCmdType.Property)]
+    public FGameplayTag TierData { get; set; }
 }

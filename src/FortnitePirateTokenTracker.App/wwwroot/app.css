@@ -347,6 +347,13 @@ h3 { margin: 0 0 6px; font-size: 15px; }
   box-shadow: 0 0 14px rgba(255, 190, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
+/* ---------- mis cofres ---------- */
+
+.chest-picker { margin: 2px 0 6px; }
+.chest-picker > summary { cursor: pointer; color: var(--gold); font-size: 13px; letter-spacing: 0.02em; }
+.chest-picker > summary::marker { color: var(--gold); }
+.chest-picker .switch { display: flex; margin-top: 10px; }
+
 /* ---------- premios ---------- */
 
 .prize-list { display: grid; gap: 10px; }

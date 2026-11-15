@@ -16,7 +16,7 @@ public sealed class ReplayAnalyzer
     private const string CacheFileName = "parsed-replays.json";
 
     /// <summary>Subir esto invalida la caché cuando cambian las reglas de detección.</summary>
-    private const string CurrentParserVersion = "15";
+    private const string CurrentParserVersion = "16";
 
     private readonly AppConfig _config;
     private readonly string _dataDir;
@@ -106,6 +106,8 @@ public sealed class ReplayAnalyzer
         FortniteReplay? replay = null;
         var playersByKey = new Dictionary<string, (string Name, bool IsLocal)>(StringComparer.Ordinal);
         var tracks = new List<PlayerTrack>();
+        var teamsByName = new Dictionary<string, int?>(StringComparer.Ordinal);
+        int? localTeam = null;
 
         try
         {
@@ -123,7 +125,7 @@ public sealed class ReplayAnalyzer
         {
             try
             {
-                FillFromReplay(parsed, replay, reader, playersByKey, tracks);
+                FillFromReplay(parsed, replay, reader, playersByKey, tracks, teamsByName, ref localTeam);
             }
             catch (Exception ex)
             {
@@ -134,7 +136,7 @@ public sealed class ReplayAnalyzer
         try
         {
             var players = new PlayerIndex(tracks);
-            FillChests(parsed, reader, replay, playersByKey, players);
+            FillChests(parsed, reader, replay, playersByKey, teamsByName, localTeam, players);
             FillPawnCosmetics(parsed, reader, players);
         }
         catch (Exception ex)
@@ -403,7 +405,8 @@ public sealed class ReplayAnalyzer
     }
 
     private void FillFromReplay(ParsedMatch parsed, FortniteReplay replay, CapturingReader reader,
-        Dictionary<string, (string Name, bool IsLocal)> playersByKey, List<PlayerTrack> tracks)
+        Dictionary<string, (string Name, bool IsLocal)> playersByKey, List<PlayerTrack> tracks,
+        Dictionary<string, int?> teamsByName, ref int? localTeam)
     {
         var players = replay.PlayerData?.ToList() ?? new List<PlayerData>();
 
@@ -424,6 +427,7 @@ public sealed class ReplayAnalyzer
             if (isLocal)
             {
                 parsed.LocalPlayerFound = true;
+                localTeam ??= player.TeamIndex;
             }
 
             var name = player.PlayerName ?? player.StreamerModeName ?? player.PlayerNameCustomOverride
@@ -437,6 +441,11 @@ public sealed class ReplayAnalyzer
                 {
                     playersByKey[key] = (name, isLocal);
                 }
+            }
+
+            if (player.TeamIndex is not null)
+            {
+                teamsByName[name] = player.TeamIndex;
             }
 
             IndexPlayer(player.Id?.ToString(CultureInfo.InvariantCulture));
@@ -497,12 +506,18 @@ public sealed class ReplayAnalyzer
     }
 
     private void FillChests(ParsedMatch parsed, CapturingReader reader, FortniteReplay? replay,
-        Dictionary<string, (string Name, bool IsLocal)> playersByKey, PlayerIndex players)
+        Dictionary<string, (string Name, bool IsLocal)> playersByKey, Dictionary<string, int?> teamsByName,
+        int? localTeam, PlayerIndex players)
     {
         // El reloj del servidor (trayectorias) y el del frame del replay no comparten origen:
         // se estima el desfase con los cofres cuya posición ya se conoce.
         var offset = players.EstimateOffset(
             reader.Containers.Where(c => c.HasPosition).Select(c => (c.TimeSeconds, c.X, c.Y, c.Z)));
+
+        // Compañero de escuadra: mismo equipo que el jugador local y no es él.
+        bool IsSquadMember(string? name, bool isLocal) =>
+            !isLocal && name is not null && localTeam is not null
+            && teamsByName.TryGetValue(name, out var team) && team == localTeam;
 
         (string? Name, bool IsLocal) Resolve(string? ownerKey, double time, double x, double y, double z, bool hasPosition)
         {
@@ -536,6 +551,8 @@ public sealed class ReplayAnalyzer
                 Confidence = LooksLikeToken(itemId) ? "B" : "C",
                 PlayerName = ownerName,
                 IsLocalPlayer = isLocal,
+                IsSquad = IsSquadMember(ownerName, isLocal),
+                Destroyed = container.Destroyed,
                 X = container.X,
                 Y = container.Y,
                 Z = container.Z,
@@ -598,6 +615,7 @@ public sealed class ReplayAnalyzer
                 Confidence = string.IsNullOrWhiteSpace(prizeId) ? "B" : "A",
                 PlayerName = ownerName,
                 IsLocalPlayer = isLocal,
+                IsSquad = IsSquadMember(ownerName, isLocal),
                 X = prize.X,
                 Y = prize.Y,
                 Z = prize.Z,

@@ -71,6 +71,8 @@ public static class ReportBuilder
                     ContainerClass = TreasureCatalog.DescribeContainer(chest.ContainerClass),
                     PlayerName = SanitizeName(chest.PlayerName, config.Anonymize),
                     IsLocalPlayer = chest.IsLocalPlayer,
+                    IsSquad = chest.IsSquad,
+                    Destroyed = chest.Destroyed,
                     IsToken = chest.IsToken,
                     Confidence = chest.Confidence,
                     ItemId = chest.ItemId,

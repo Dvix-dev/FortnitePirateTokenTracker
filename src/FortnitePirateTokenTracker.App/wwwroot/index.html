@@ -38,6 +38,20 @@
 
     <div class="grid-stats" id="statsGrid"></div>
 
+    <div class="card" id="myChestsCard">
+      <div class="card-head">
+        <h2>Mis cofres</h2>
+        <span class="pill pill-gold" id="myChestsSum">0</span>
+      </div>
+      <details class="chest-picker">
+        <summary>Elegir qué contar</summary>
+        <label class="switch"><input type="checkbox" id="countMineOpened" checked><span>Cofres míos abiertos</span></label>
+        <label class="switch"><input type="checkbox" id="countMineDestroyed"><span>Cofres rotos por mí</span></label>
+        <label class="switch"><input type="checkbox" id="countSquad"><span>Cofres rotos o abiertos por mi squad</span></label>
+      </details>
+      <p class="muted small" id="myChestsNote">Marca las opciones que quieras sumar.</p>
+    </div>
+
     <div class="card">
       <div class="card-head">
         <h2>Ritmo de aparición</h2>

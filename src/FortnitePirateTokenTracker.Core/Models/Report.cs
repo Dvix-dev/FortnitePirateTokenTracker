@@ -69,6 +69,8 @@ public sealed class ChestEvent
     public string ContainerClass { get; set; } = "";
     public string? PlayerName { get; set; }
     public bool IsLocalPlayer { get; set; }
+    public bool IsSquad { get; set; }
+    public bool Destroyed { get; set; }
     public bool IsToken { get; set; }
     public string Confidence { get; set; } = "C";
     public string? ItemId { get; set; }

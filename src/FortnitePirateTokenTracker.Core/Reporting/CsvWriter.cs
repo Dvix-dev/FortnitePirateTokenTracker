@@ -11,7 +11,8 @@ public static class CsvWriter
     {
         "match_id", "replay_file", "tiempo", "timestamp_ms", "jugador", "es_jugador_local",
         "es_token", "nivel_confianza", "contenedor", "item_id", "x", "y", "z",
-        "posicion_aproximada", "zona", "cofre_en_partida", "token_en_partida"
+        "posicion_aproximada", "zona", "cofre_en_partida", "token_en_partida",
+        "destruido", "de_squad"
     };
 
     public static void Write(string path, IEnumerable<ChestEvent> chests, string separator = ";")
@@ -39,7 +40,9 @@ public static class CsvWriter
                 c.PositionApproximate ? "si" : "no",
                 c.Zone,
                 c.ChestIndexInMatch.ToString(CultureInfo.InvariantCulture),
-                c.TokenIndexInMatch.ToString(CultureInfo.InvariantCulture)
+                c.TokenIndexInMatch.ToString(CultureInfo.InvariantCulture),
+                c.Destroyed ? "si" : "no",
+                c.IsSquad ? "si" : "no"
             };
 
             sb.AppendLine(string.Join(separator, fields.Select(f => Escape(f, separator))));

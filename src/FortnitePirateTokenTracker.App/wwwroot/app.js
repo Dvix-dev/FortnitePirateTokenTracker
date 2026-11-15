@@ -256,6 +256,43 @@ function renderConfig() {
   `;
 }
 
+/* ---------------- mis cofres ---------------- */
+
+function renderMyChests() {
+  const chests = state.report?.chests ?? [];
+  const mineOpened = $('countMineOpened').checked;
+  const mineDestroyed = $('countMineDestroyed').checked;
+  const squad = $('countSquad').checked;
+
+  let total = 0;
+  let opened = 0;
+  let broken = 0;
+  let mates = 0;
+
+  for (const chest of chests) {
+    if (chest.isLocalPlayer) {
+      if (chest.destroyed) {
+        broken++;
+        if (mineDestroyed) total++;
+      } else {
+        opened++;
+        if (mineOpened) total++;
+      }
+    } else if (chest.isSquad) {
+      mates++;
+      if (squad) total++;
+    }
+  }
+
+  $('myChestsSum').textContent = total.toLocaleString('es-ES');
+  $('myChestsNote').textContent =
+    `${opened} míos abiertos · ${broken} rotos por mí · ${mates} de mi squad.`;
+}
+
+['countMineOpened', 'countMineDestroyed', 'countSquad'].forEach((id) => {
+  $(id).addEventListener('change', renderMyChests);
+});
+
 /* ---------------- estado global ---------------- */
 
 function renderStatus() {
@@ -272,6 +309,7 @@ function renderStatus() {
 function renderAll() {
   renderStatus();
   renderStats();
+  renderMyChests();
   renderChests();
   renderPrizes();
   renderCosmetics();
