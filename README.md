@@ -4,7 +4,7 @@ Herramienta local para Windows que analiza tus repeticiones de Fortnite (`.repla
 
 Lee únicamente los archivos de repetición que el propio juego genera en tu disco. No modifica Fortnite, no inyecta código, no lee memoria del proceso y no se conecta a Epic Games.
 
-> **Estado del proyecto:** este repositorio contiene por ahora **solo la documentación y la especificación técnica**. No hay código implementado todavía. El plan de ejecución y los criterios de aceptación están descritos más abajo.
+> **Estado del proyecto:** hay una primera versión funcional: aplicación de consola + panel web local que ya analiza repeticiones reales, cuenta cofres con sus timestamps, cachea resultados y exporta CSV/JSON. La atribución de cada cofre a un jugador, sus coordenadas y la identificación del premio (Token) están pendientes de un lector extendido; el detalle está en [Implementación actual](#19-implementación-actual).
 
 ---
 
@@ -364,4 +364,71 @@ Las repeticiones contienen nombres de jugadores, identificadores de cuenta y pos
 
 ---
 
-*Documento de especificación. La implementación se realizará en las fases descritas en la sección 13; cualquier cambio de alcance debe reflejarse aquí primero.*
+## 19. Implementación actual
+
+Arquitectura entregada:
+
+```text
+src/
+├─ FortnitePirateTokenTracker.Core/     # configuración, catálogo, modelos, agregación, CSV
+└─ FortnitePirateTokenTracker.App/      # lector, analizador con caché, servidor local, panel web
+   ├─ Parsing/CapturingReader.cs        # subclase del lector oficial: captura grupos replicados
+   ├─ Parsing/ReplayAnalyzer.cs         # lote + caché por tamaño/mtime
+   ├─ Reporting/ScanRunner.cs           # informe + CSV
+   ├─ Web/PanelServer.cs                # servidor HTTP mínimo sobre TcpListener
+   └─ wwwroot/                          # panel (HTML/CSS/JS sin dependencias)
+```
+
+No se parchea ni se redistribuye el parser: `CapturingReader` hereda de `FortniteReplayReader.ReplayReader` y usa el gancho `OnExportRead` para observar cada grupo, delegando el parseo normal en la implementación base.
+
+| Área | Estado |
+|------|--------|
+| Lectura de `.replay` (Oodle + cifrado) | Funciona con `FortniteReplayReader` 3.1.0 |
+| Contenedores abiertos y timestamps | Funciona (`Tiered_Chest_Athena`, `AmmoBox`, …) |
+| Metadatos (jugadores, jugador local, duración) | Funciona (89 jugadores en la partida de prueba) |
+| Caché, CSV, `report.json` | Funciona |
+| Panel web, configuración y guía | Funciona |
+| Cosméticos por jugador (outfit, pico, mochila, coche) | Los campos existen en el parser, pero llegan **vacíos** en las repeticiones actuales |
+| Atribución cofre → jugador | Pendiente: el modelo no expone `SearchingPawn` |
+| Coordenadas del cofre | Pendiente: el contenedor no replica posición accesible |
+| Identificación del premio / Token | Pendiente: la heurística por pickup está lista, sin ids de premio confirmados |
+
+## 20. Hallazgos del volcado real (2026-11-15)
+
+Sondeo sobre repeticiones reales de la carpeta por defecto:
+
+- **Grupos de contenedor observados:** `Tiered_Chest_Athena`, `AlwaysSpawn_NormalChest`, `Tiered_Chest_5_Child`, `BGA_LootCannon_StandardChest_Pirate`, `BGA_ExtractionPointGameplay_Chest`, `BP_Container_WoodenCrates_*`. La librería solo tipa el primero; el resto aparece como grupo no leído.
+- **Pickups:** 1 939 en una partida de 20 MB (63 ids únicos), dominados por munición y armas (`WID_*`). Ningún id contenía `Token`/`Pirate`/`Gold` en las muestras.
+- **Volumen de aperturas:** 125 contenedores en una partida de 20 MB y 780 en tres partidas (~260 por partida).
+- **Modo Debug:** los grupos de cofre están marcados `minimalParseMode: Debug`; en modo `Minimal` no se leen. Se usa `Debug` con tolerancia a eventos desconocidos para no abortar el archivo.
+- **Tiempo del frame:** la propiedad `CurrentTimeSeconds` no es accesible en 3.1.0 (de ahí que los proyectos de la comunidad la parcheen). Se resuelve leyendo la cabecera del demo frame y restaurando la posición con `Seek` antes de delegar.
+
+## 21. Cómo ejecutarlo
+
+Requiere el SDK de .NET 10. Si no está instalado en el sistema, se puede instalar de forma local y aislada:
+
+```powershell
+# SDK local en .dotnet/ (ignorado por git)
+./.dotnet/dotnet.exe build -c Release
+
+# Panel web (abre el navegador en http://localhost:5178)
+./src/FortnitePirateTokenTracker.App/bin/Release/net10.0/TokenTracker.exe
+
+# Análisis en lote desde consola
+./src/FortnitePirateTokenTracker.App/bin/Release/net10.0/TokenTracker.exe analyze --limit 3
+
+# Volcado de depuración de un archivo
+./src/FortnitePirateTokenTracker.App/bin/Release/net10.0/TokenTracker.exe probe <archivo.replay>
+```
+
+Salidas en `data/`: `report.json`, `resultados_token.csv`, `config.json` y `cache/parsed-replays.json`.
+
+## 22. Estado por sprint
+
+| Sprint | Contenido | Estado |
+|--------|-----------|--------|
+| 1 | Solución, núcleo de datos, panel, configuración y guía | Completado |
+| 2 | Lector con gancho, timestamps, lote, caché y exportación | Completado |
+| 3 | Atribución jugador ↔ cofre, posición del cofre, premio/Token y cosméticos | Pendiente |
+
+*Documento de especificación. Cualquier cambio de alcance debe reflejarse aquí primero.*
