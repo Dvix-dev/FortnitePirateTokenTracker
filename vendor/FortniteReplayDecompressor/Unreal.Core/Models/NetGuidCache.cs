@@ -65,6 +65,12 @@ public class NetGuidCache
     private readonly Dictionary<uint, string> _cleanedPaths = new();
     private readonly Dictionary<string, string> _cleanedClassNetCache = new();
     private readonly HashSet<string> _failedPaths = new(); //Path names that didn't find an export group
+
+    // Índice por nombre de clase ya limpio ("Tiered_Chest_Athena_C" → grupo). Evita recorrer
+    // toda la tabla de grupos por cada actor, que con miles de actores era cuadrático.
+    private readonly Dictionary<string, NetFieldExportGroup> _groupsByClassName = new(StringComparer.Ordinal);
+
+    private int _failedScanBudget = 400_000;
     private NetFieldExportGroup? _networkGameplayTagNodeIndex { get; set; }
 
     /// <summary>
@@ -97,6 +103,12 @@ public class NetGuidCache
         NetFieldExportGroupMap[group] = exportGroup;
         NetFieldExportGroupIndexToGroup[exportGroup.PathNameIndex] = group;
         _netFieldExportGroupFromIndex[exportGroup.PathNameIndex] = exportGroup;
+
+        var className = group.RemoveAllPathPrefixes();
+        if (className.Length > 0)
+        {
+            _groupsByClassName[className] = exportGroup;
+        }
     }
 
     /// <summary>
@@ -148,12 +160,31 @@ public class NetGuidCache
     private static readonly System.Text.RegularExpressions.Regex StaticInstanceSuffix =
         new(@"(_UAID_.*|_[0-9a-f]{16}_\d+)$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
+    // Diagnóstico de rendimiento: cuántas veces se busca un grupo por actor y cuánto cuesta.
+    public static long LookupCalls;
+    public static long LookupTicks;
+
     public NetFieldExportGroup? GetNetFieldExportGroup(uint? netguid)
     {
         if (!netguid.HasValue)
         {
             return null;
         }
+
+        LookupCalls++;
+        var marca = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            return GetNetFieldExportGroupCore(netguid);
+        }
+        finally
+        {
+            LookupTicks += System.Diagnostics.Stopwatch.GetTimestamp() - marca;
+        }
+    }
+
+    private NetFieldExportGroup? GetNetFieldExportGroupCore(uint? netguid)
+    {
 
         if (!_archTypeToExportGroup.TryGetValue(netguid.Value, out var group))
         {
@@ -173,6 +204,16 @@ public class NetGuidCache
                 _archTypeToExportGroup[netguid.Value] = NetFieldExportGroupMapPathFixed[netguid.Value];
                 return group;
             }
+
+            // Los recorridos de respaldo se limitan: con muchas rutas que no resuelven,
+            // reintentarlos sin tope dominaba el tiempo de análisis.
+            if (_failedScanBudget <= 0)
+            {
+                _failedPaths.Add(path);
+                return null;
+            }
+
+            _failedScanBudget--;
 
             foreach (var groupPathKvp in NetFieldExportGroupMap)
             {
@@ -218,6 +259,15 @@ public class NetGuidCache
             if (baseName.Length > 0)
             {
                 var className = baseName + "_C";
+
+                // Camino rápido: el nombre de clase ya está indexado.
+                if (_groupsByClassName.TryGetValue(className, out var fastGroup))
+                {
+                    NetFieldExportGroupMapPathFixed[netguid.Value] = fastGroup;
+                    _archTypeToExportGroup[netguid.Value] = fastGroup;
+                    return fastGroup;
+                }
+
                 foreach (var groupPathKvp in NetFieldExportGroupMap)
                 {
                     if (_cleanedPaths.TryGetValue(groupPathKvp.Value.PathNameIndex, out var groupPathFixed) && groupPathFixed == className)

@@ -319,7 +319,25 @@ public class NetFieldParser
     /// <param name="handle"></param>
     /// <param name="exportGroup"></param>
     /// <param name="netBitReader"></param>
+    // Diagnóstico de rendimiento: coste total de leer campos replicados.
+    public static long ReadFieldCalls;
+    public static long ReadFieldTicks;
+
     public bool ReadField(INetFieldExportGroup obj, NetFieldExport export, uint handle, NetFieldExportGroup exportGroup, NetBitReader netBitReader, bool singleInstance = true)
+    {
+        ReadFieldCalls++;
+        var marca = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            return ReadFieldCore(obj, export, handle, exportGroup, netBitReader, singleInstance);
+        }
+        finally
+        {
+            ReadFieldTicks += System.Diagnostics.Stopwatch.GetTimestamp() - marca;
+        }
+    }
+
+    private bool ReadFieldCore(INetFieldExportGroup obj, NetFieldExport export, uint handle, NetFieldExportGroup exportGroup, NetBitReader netBitReader, bool singleInstance)
     {
         if (export.PropertyId == -2 || exportGroup.GroupId == -2)
         {

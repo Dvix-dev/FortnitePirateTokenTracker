@@ -16,7 +16,7 @@ public sealed class ReplayAnalyzer
     private const string CacheFileName = "parsed-replays.json";
 
     /// <summary>Subir esto invalida la caché cuando cambian las reglas de detección.</summary>
-    private const string CurrentParserVersion = "18";
+    private const string CurrentParserVersion = "20";
 
     private readonly AppConfig _config;
     private readonly string _dataDir;
@@ -161,6 +161,8 @@ public sealed class ReplayAnalyzer
         var teamsByName = new Dictionary<string, int?>(StringComparer.Ordinal);
         int? localTeam = null;
 
+        var cronometro = System.Diagnostics.Stopwatch.StartNew();
+
         try
         {
             // Fortnite mantiene la repetición abierta mientras graba: se abre en modo
@@ -169,6 +171,12 @@ public sealed class ReplayAnalyzer
                 file, FileMode.Open, FileAccess.Read,
                 FileShare.ReadWrite | FileShare.Delete);
             replay = reader.ReadReplay(stream);
+            cronometro.Stop();
+
+            if (Environment.GetEnvironmentVariable("TT_TIME") == "1")
+            {
+                Console.WriteLine($"[tiempo] lectura={cronometro.ElapsedMilliseconds}ms");
+            }
         }
         catch (Exception ex)
         {
@@ -191,9 +199,15 @@ public sealed class ReplayAnalyzer
 
         try
         {
+            var reloj = System.Diagnostics.Stopwatch.StartNew();
             var players = new PlayerIndex(tracks);
             FillChests(parsed, reader, replay, playersByKey, teamsByName, localTeam, players);
             FillPawnCosmetics(parsed, reader, players);
+
+            if (Environment.GetEnvironmentVariable("TT_TIME") == "1")
+            {
+                Console.WriteLine($"[tiempo] atribucion={reloj.ElapsedMilliseconds}ms");
+            }
         }
         catch (Exception ex)
         {
@@ -666,14 +680,25 @@ public sealed class ReplayAnalyzer
             var handler = prize.TierData?.StartsWith("GA_TreasureHandler", StringComparison.Ordinal) == true
                 ? prize.TierData
                 : null;
-            var shown = prizeName ?? prizeId ?? handler;
+            var shown = prizeName ?? prizeId
+                        ?? (handler is not null ? "Tesoro del evento (premio sin identificar)" : null);
+
+            var timeMs = (int)Math.Round(prize.TimeSeconds * 1000);
+            var containerClass = prize.Source == "habilidad"
+                ? "Tesoro concedido (habilidad)"
+                : "Cofre dorado (tesoro)";
+
+            // La habilidad del tesoro se exporta con dos nombres (clase y plantilla):
+            // el mismo premio llegaría dos veces en el mismo instante.
+            if (parsed.Chests.Any(c => c.TimeMs == timeMs && c.ContainerClass == containerClass))
+            {
+                continue;
+            }
 
             parsed.Chests.Add(new ParsedChest
             {
-                TimeMs = (int)Math.Round(prize.TimeSeconds * 1000),
-                ContainerClass = prize.Source == "habilidad"
-                    ? "Tesoro concedido (habilidad)"
-                    : "Cofre dorado (tesoro)",
+                TimeMs = timeMs,
+                ContainerClass = containerClass,
                 ItemId = shown,
                 IsToken = LooksLikeToken(prizeId),
                 Category = TreasureContent.PanelKind(prizeId) ?? TreasureCatalog.ClassifyPrize(prizeId),

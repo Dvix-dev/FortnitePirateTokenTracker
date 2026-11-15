@@ -99,6 +99,14 @@ if (command == "probe")
         Console.WriteLine($"  {count,5}x lee={reader.WillReadGroup(path)} {path}");
     }
 
+    if (Environment.GetEnvironmentVariable("TT_TIME") == "1")
+    {
+        var freq = (double)System.Diagnostics.Stopwatch.Frequency;
+        Console.WriteLine($"[lookup] llamadas={Unreal.Core.Models.NetGuidCache.LookupCalls} ms={Unreal.Core.Models.NetGuidCache.LookupTicks * 1000 / freq:0}");
+        Console.WriteLine($"[readfield] llamadas={Unreal.Core.NetFieldParser.ReadFieldCalls} ms={Unreal.Core.NetFieldParser.ReadFieldTicks * 1000 / freq:0}");
+        Console.WriteLine($"[captura] llamadas={reader.CaptureCalls} ms={reader.CaptureMilliseconds:0}");
+    }
+
     Console.WriteLine($"Habilidades: payloads={reader.AbilityPayloads} premios={reader.AbilityGrants} clases=[{string.Join(", ", reader.TreasureHandlerClasses)}]");
 
     Console.WriteLine("Grupos de habilidades:");

@@ -120,6 +120,9 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
     private int _abilityPayloads;
     private int _abilityGrants;
 
+    /// <summary>Habilidades de premio distintas ya vistas (una por tesoro concedido en la partida).</summary>
+    private readonly HashSet<string> _treasureHandlersSeen = new(StringComparer.Ordinal);
+
     public int AbilityPayloads => _abilityPayloads;
     public int AbilityGrants => _abilityGrants;
     public IEnumerable<string> TreasureHandlerClasses => _treasureHandlerGuids.Values.Distinct().Take(8);
@@ -315,8 +318,16 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         base.ReadDemoFrameIntoPlaybackPackets(archive);
     }
 
+    private long _captureTicks;
+    private long _captureCalls;
+
+    public double CaptureMilliseconds => _captureTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+    public long CaptureCalls => _captureCalls;
+
     protected override void OnExportRead(uint channelIndex, INetFieldExportGroup? exportGroup)
     {
+        var marcaCaptura = System.Diagnostics.Stopwatch.GetTimestamp();
+        _captureCalls++;
         try
         {
             base.OnExportRead(channelIndex, exportGroup);
@@ -357,6 +368,10 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         catch (Exception ex)
         {
             Warnings.Add($"Captura {exportGroup.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            _captureTicks += System.Diagnostics.Stopwatch.GetTimestamp() - marcaCaptura;
         }
     }
 
@@ -841,7 +856,23 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
             name = name[(dot + 1)..];
         }
 
-        _treasureHandlerGuids[netGuid] = name.Replace("Default__", "", StringComparison.Ordinal);
+        var handler = name.Replace("Default__", "", StringComparison.Ordinal);
+        _treasureHandlerGuids[netGuid] = handler;
+
+        // La clase de la habilidad se envía la primera vez que el jugador recibe un tesoro:
+        // es la señal más barata de que en esta partida cayó alguno.
+        if (_treasureHandlersSeen.Add(handler))
+        {
+            _abilityGrants++;
+            Prizes.Add(new PrizeEvent
+            {
+                TimeSeconds = NowSeconds,
+                TierData = handler,
+                Success = true,
+                ClassName = "GA_TreasureHandler",
+                Source = "habilidad"
+            });
+        }
     }
 
     /// <summary>
