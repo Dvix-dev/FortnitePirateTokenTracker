@@ -16,3 +16,6 @@ data/cache/
 data/*.json
 data/*.csv
 !data/catalog/
+
+# Clon temporal usado para estudiar la implementación de referencia
+/tmp_cc/

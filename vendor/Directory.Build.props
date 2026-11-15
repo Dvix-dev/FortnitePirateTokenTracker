@@ -1,0 +1,14 @@
+<Project>
+  <!--
+    Copia local de FortniteReplayDecompressor con los parches de ChestCounter
+    (RawProbe, lectura de ActivatableAbilities, NetGuidCache para cofres del nivel).
+    MIT: ver vendor/FortniteReplayDecompressor/LICENSE-FortniteReplayDecompressor.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <NoWarn>$(NoWarn);CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8625;CS8629;CS0168;CS0219;CS1998;CS8619;CS8620;CS8765;CS8767;CS0108;CS0114;CS0169;CS0414</NoWarn>
+  </PropertyGroup>
+</Project>

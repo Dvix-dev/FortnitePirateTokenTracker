@@ -16,7 +16,7 @@ public sealed class ReplayAnalyzer
     private const string CacheFileName = "parsed-replays.json";
 
     /// <summary>Subir esto invalida la caché cuando cambian las reglas de detección.</summary>
-    private const string CurrentParserVersion = "16";
+    private const string CurrentParserVersion = "17";
 
     private readonly AppConfig _config;
     private readonly string _dataDir;
@@ -605,13 +605,22 @@ public sealed class ReplayAnalyzer
             var prizeId = UsablePrizeTag(prize.PrizeTemplateId)
                           ?? RewardNear(prize.TimeSeconds, prize.X, prize.Y, prize.Z);
 
+            // El id replicado se traduce al nombre real del premio con el catálogo del evento.
+            var prizeName = TreasureContent.Name(prizeId);
+            var handler = prize.TierData?.StartsWith("GA_TreasureHandler", StringComparison.Ordinal) == true
+                ? prize.TierData
+                : null;
+            var shown = prizeName ?? prizeId ?? handler;
+
             parsed.Chests.Add(new ParsedChest
             {
                 TimeMs = (int)Math.Round(prize.TimeSeconds * 1000),
-                ContainerClass = "Cofre dorado (tesoro)",
-                ItemId = prizeId,
+                ContainerClass = prize.Source == "habilidad"
+                    ? "Tesoro concedido (habilidad)"
+                    : "Cofre dorado (tesoro)",
+                ItemId = shown,
                 IsToken = LooksLikeToken(prizeId),
-                Category = TreasureCatalog.ClassifyPrize(prizeId),
+                Category = TreasureContent.PanelKind(prizeId) ?? TreasureCatalog.ClassifyPrize(prizeId),
                 Confidence = string.IsNullOrWhiteSpace(prizeId) ? "B" : "A",
                 PlayerName = ownerName,
                 IsLocalPlayer = isLocal,
@@ -692,7 +701,9 @@ public sealed class ReplayAnalyzer
             return null;
         }
 
-        var usable = tag.Contains("Cosmetic", StringComparison.OrdinalIgnoreCase)
+        var usable = Guid.TryParse(tag, out _)
+                     || tag.Contains("dpid_", StringComparison.OrdinalIgnoreCase)
+                     || tag.Contains("Cosmetic", StringComparison.OrdinalIgnoreCase)
                      || tag.Contains("Delilah", StringComparison.OrdinalIgnoreCase)
                      || tag.Contains("Treasure", StringComparison.OrdinalIgnoreCase)
                      || tag.Contains("Token", StringComparison.OrdinalIgnoreCase)

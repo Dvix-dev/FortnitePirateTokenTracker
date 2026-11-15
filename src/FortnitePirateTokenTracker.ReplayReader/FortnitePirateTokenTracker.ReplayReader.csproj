@@ -4,6 +4,9 @@
     El constructor de Unreal.Core.NetFieldParser registra los [NetFieldExportGroup]
     de los ensamblados cuyo nombre contiene "ReplayReader". Por eso este proyecto
     se llama así: es la forma de registrar grupos propios sin parchear el parser.
+
+    FortniteReplayReader se toma de vendor/FortniteReplayDecompressor (copia local
+    con los parches de lectura de premios y de cofres del nivel), no del paquete.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -14,7 +17,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FortniteReplayReader" Version="3.1.0" />
+    <ProjectReference Include="..\..\vendor\FortniteReplayDecompressor\FortniteReplayReader\FortniteReplayReader.csproj" />
   </ItemGroup>
 
 </Project>

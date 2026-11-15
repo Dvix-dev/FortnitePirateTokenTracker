@@ -43,6 +43,9 @@ public sealed class PrizeEvent
     public double Z { get; set; }
     public bool HasPosition { get; set; }
     public string ClassName { get; set; } = "";
+
+    /// <summary>De dónde sale el premio: el cofre dorado o la habilidad concedida.</summary>
+    public string Source { get; set; } = "";
 }
 
 /// <summary>Un pickup de ítem observado, útil para localizar el premio del cofre.</summary>
@@ -111,8 +114,44 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
 
     private float _nowSeconds;
 
+    /// <summary>Clase de habilidad del premio ("GA_TreasureHandler_*"): NetGUID → nombre.</summary>
+    private readonly Dictionary<uint, string> _treasureHandlerGuids = new();
+
+    private int _abilityPayloads;
+    private int _abilityGrants;
+
+    public int AbilityPayloads => _abilityPayloads;
+    public int AbilityGrants => _abilityGrants;
+    public IEnumerable<string> TreasureHandlerClasses => _treasureHandlerGuids.Values.Distinct().Take(8);
+
+    /// <summary>Un premio viaja como texto dentro del bloque opaco del cofre o de la habilidad.</summary>
+    private static readonly System.Text.RegularExpressions.Regex PrizeIdPattern = new(
+        "[A-Za-z][A-Za-z0-9_]*:[A-Za-z0-9_.\\-]+|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
     public CapturingReader(ParseMode mode) : base(null, mode)
     {
+        // Las habilidades del jugador no las decodifica la librería (sus campos no llevan
+        // nombre exportado). RawProbe entrega sus bits en crudo y aquí se busca qué
+        // habilidad de premio se concedió y cuándo.
+        // Desactivado por defecto: interceptar los bits de la lista de habilidades multiplica
+        // por diez el tiempo de análisis. Se activa con TT_ABILITY_PROBE=1 para depurar.
+        if (Environment.GetEnvironmentVariable("TT_ABILITY_PROBE") == "1")
+        {
+        RawProbe.Filter = path => path.Contains("FortAbilitySystemComponent", StringComparison.Ordinal);
+        RawProbe.Sink = (channel, group, field, data, bits) =>
+        {
+            if (group.Contains("AbilitySystemComponent", StringComparison.Ordinal)
+                && group.EndsWith("_ClassNetCache", StringComparison.Ordinal)
+                && field is "?" or "ActivatableAbilities"
+                && _treasureHandlerGuids.Count > 0)
+            {
+                _abilityPayloads++;
+                ReadAbilityGrants(channel, data, bits);
+            }
+        };
+        }
+
         PromoteGroup(
             "/Game/Building/ActorBlueprints/Containers/Tiered_Chest_Athena.Tiered_Chest_Athena_C",
             "/Tokenizer/TieredChestAthena");
@@ -302,7 +341,7 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
             {
                 TrackTrackedContainer(channelIndex, tracked);
             }
-            else if (exportGroup is FortnitePirateTokenTracker.ReplayReader.TreasureHuntChest prizeChest)
+            else if (exportGroup is TreasureHuntChest prizeChest)
             {
                 TrackPrizeChest(channelIndex, prizeChest);
             }
@@ -555,7 +594,7 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
 
         _openedContainers.TryGetValue(channelIndex, out var wasOpened);
 
-        if (container.bAlreadySearched && !wasOpened)
+        if (container.bAlreadySearched == true && !wasOpened)
         {
             _openedContainers[channelIndex] = true;
             _openedChannels.Add(channelIndex);
@@ -570,7 +609,7 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
             {
                 ClassName = container.GetType().Name,
                 TimeSeconds = NowSeconds,
-                SearchAnimationCount = container.SearchAnimationCount,
+                SearchAnimationCount = container.SearchAnimationCount ?? 0,
                 LootTier = container.ReplicatedLootTier,
                 SearchingPawn = container.SearchingPawn?.ToString(CultureInfo.InvariantCulture),
                 OwnerKey = ownerKey,
@@ -596,7 +635,7 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
             {
                 ClassName = container.GetType().Name + " (destruido)",
                 TimeSeconds = NowSeconds,
-                SearchAnimationCount = container.SearchAnimationCount,
+                SearchAnimationCount = container.SearchAnimationCount ?? 0,
                 LootTier = container.ReplicatedLootTier,
                 SearchingPawn = container.SearchingPawn?.ToString(CultureInfo.InvariantCulture),
                 OwnerKey = ownerKey,
@@ -607,7 +646,7 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
                 Destroyed = true
             });
         }
-        else if (!container.bAlreadySearched)
+        else if (container.bAlreadySearched == false)
         {
             _openedContainers[channelIndex] = false;
         }
@@ -625,7 +664,7 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         _openedContainers.TryGetValue(channelIndex, out var wasOpened);
 
         // Primera observación ya abierta, o transición cerrado -> abierto.
-        if (searched && !wasOpened)
+        if (searched == true && !wasOpened)
         {
             _openedContainers[channelIndex] = true;
             _openedChannels.Add(channelIndex);
@@ -645,7 +684,7 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
             {
                 ClassName = container.GetType().Name,
                 TimeSeconds = NowSeconds,
-                SearchAnimationCount = container.SearchAnimationCount,
+                SearchAnimationCount = container.SearchAnimationCount ?? 0,
                 LootTier = container.ReplicatedLootTier,
                 ItemId = ReadItemId(container),
                 SearchingPawn = pawnGuid?.ToString(CultureInfo.InvariantCulture),
@@ -667,7 +706,7 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
             {
                 ClassName = container.GetType().Name + " (destruido)",
                 TimeSeconds = NowSeconds,
-                SearchAnimationCount = container.SearchAnimationCount,
+                SearchAnimationCount = container.SearchAnimationCount ?? 0,
                 LootTier = container.ReplicatedLootTier,
                 X = hasPosition ? actorPosition.X : 0,
                 Y = hasPosition ? actorPosition.Y : 0,
@@ -676,15 +715,16 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
                 Destroyed = true
             });
         }
-        else if (!searched)
+        else if (searched == false)
         {
             _openedContainers[channelIndex] = false;
         }
     }
 
-    private void TrackPrizeChest(uint channelIndex, FortnitePirateTokenTracker.ReplayReader.TreasureHuntChest prizeChest)
+    private void TrackPrizeChest(uint channelIndex, TreasureHuntChest prizeChest)
     {
-        var (ownerKey, x, y, z, hasPosition) = ResolvePawn(prizeChest.OpeningPawn);
+        var opener = prizeChest.OpeningPawn ?? prizeChest.Instigator;
+        var (ownerKey, x, y, z, hasPosition) = ResolvePawn(opener);
         if (!hasPosition && TryGetActorLocation(channelIndex, out var actorPosition))
         {
             (x, y, z, hasPosition) = (actorPosition.X, actorPosition.Y, actorPosition.Z, true);
@@ -693,21 +733,229 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         Prizes.Add(new PrizeEvent
         {
             TimeSeconds = NowSeconds,
-            // La etiqueta de premio se declara dos veces (handles 48 y 49); se prueba la
-            // primera y, si no sirve, la segunda.
-            PrizeTemplateId = ReadTag(prizeChest.Prize48) ?? ReadTag(prizeChest.Prize49),
-            TierData = ReadTag(prizeChest.TierData),
-            Success = prizeChest.bSuccess,
-            Tier = prizeChest.Tier,
-            OpeningPawn = prizeChest.OpeningPawn,
-            OwnerPersistentId = prizeChest.OwnerPersistentId,
+            // El premio no es un tag: es un bloque opaco con el id en texto
+            // (por ejemplo "DelilahPrize:dpid_item4").
+            PrizeTemplateId = ReadOpaqueText(prizeChest.PrizeTemplateId),
+            TierData = ReadOpaqueText(prizeChest.Tier),
+            Success = prizeChest.bSuccess != false,
+            OpeningPawn = opener,
+            OwnerPersistentId = prizeChest.OwnerPersistentID is { } owner ? (uint?)owner.IntPacked : null,
             OwnerKey = ownerKey,
             X = x,
             Y = y,
             Z = z,
             HasPosition = hasPosition,
-            ClassName = prizeChest.GetType().Name
+            ClassName = prizeChest.GetType().Name,
+            Source = "cofre"
         });
+    }
+
+    /// <summary>
+    /// Saca el identificador legible de un bloque de bits opaco. El premio llega como texto
+    /// suelto dentro de la estructura, así que se busca un patrón "algo:id" o un GUID.
+    /// </summary>
+    private static string? ReadOpaqueText(DebuggingObject? raw)
+    {
+        if (raw is null || raw.TotalBits == 0)
+        {
+            return null;
+        }
+
+        var bytes = raw.Bytes;
+        var bits = raw.TotalBits;
+        string? guid = null;
+
+        // El texto puede empezar en cualquier bit: se prueban los ocho desplazamientos.
+        for (var shift = 0; shift < 8; shift++)
+        {
+            var builder = new System.Text.StringBuilder();
+            var text = new System.Text.StringBuilder();
+            for (var bit = shift; bit + 8 <= bits; bit += 8)
+            {
+                var value = 0;
+                for (var k = 0; k < 8; k++)
+                {
+                    var position = bit + k;
+                    value |= (bytes[position >> 3] >> (position & 7) & 1) << k;
+                }
+
+                var c = (char)value;
+                if (c is >= (char)32 and < (char)127)
+                {
+                    text.Append(c);
+                }
+                else
+                {
+                    if (text.Length >= 5)
+                    {
+                        builder.Append(text).Append(' ');
+                    }
+                    text.Clear();
+                }
+            }
+
+            if (text.Length >= 5)
+            {
+                builder.Append(text);
+            }
+
+            var ascii = builder.ToString();
+            if (ascii.Length == 0)
+            {
+                continue;
+            }
+
+            foreach (System.Text.RegularExpressions.Match match in PrizeIdPattern.Matches(ascii))
+            {
+                var value = match.Value;
+                if (value.Contains("dpid_", StringComparison.OrdinalIgnoreCase)
+                    || value.Contains("DelilahPrize", StringComparison.OrdinalIgnoreCase))
+                {
+                    return value;
+                }
+
+                guid ??= value;
+            }
+        }
+
+        return guid;
+    }
+
+    /// <summary>
+    /// La clase de la habilidad de premio se exporta la primera vez que el jugador recibe un
+    /// tesoro; su NetGUID es lo que luego aparece en la lista de habilidades concedidas.
+    /// </summary>
+    protected override void OnNetGuidExported(uint netGuid, string pathName)
+    {
+        base.OnNetGuidExported(netGuid, pathName);
+
+        if (string.IsNullOrEmpty(pathName) || !pathName.Contains("TreasureHandler", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var name = pathName[(pathName.LastIndexOf('/') + 1)..];
+        var dot = name.LastIndexOf('.');
+        if (dot >= 0)
+        {
+            name = name[(dot + 1)..];
+        }
+
+        _treasureHandlerGuids[netGuid] = name.Replace("Default__", "", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Lee la lista de habilidades concedidas (FastArray "ActivatableAbilities") sin nombres de
+    /// campo: cabecera, y por cada elemento su id y sus propiedades. Cuando una referencia es una
+    /// habilidad de premio, ese jugador acaba de recibir un tesoro.
+    /// </summary>
+    private void ReadAbilityGrants(uint channel, byte[] data, int bits)
+    {
+        var pos = 1; // bSupportsFastArrayDeltaStructSerialization
+        int Bit() => pos < bits ? (data[pos >> 3] >> (pos & 7)) & 1 : throw new IndexOutOfRangeException();
+        uint Read(int n)
+        {
+            uint value = 0;
+            for (var k = 0; k < n; k++)
+            {
+                value |= (uint)Bit() << k;
+                pos++;
+            }
+            return value;
+        }
+        uint ReadPacked()
+        {
+            uint value = 0;
+            for (var shift = 0; shift < 35; shift += 7)
+            {
+                var b = Read(8);
+                value |= (b >> 1) << shift;
+                if ((b & 1) == 0)
+                {
+                    return value;
+                }
+            }
+            throw new InvalidDataException();
+        }
+
+        try
+        {
+            _ = Read(32);
+            _ = Read(32);
+            var deletes = Read(32);
+            var changed = Read(32);
+            if (deletes > 512 || changed > 512 || bits < 129)
+            {
+                return;
+            }
+
+            pos += (int)deletes * 32;
+            for (var i = 0; i < changed; i++)
+            {
+                var elementId = (int)Read(32);
+                while (true)
+                {
+                    var handle = ReadPacked();
+                    if (handle == 0)
+                    {
+                        break;
+                    }
+
+                    var numBits = (int)ReadPacked();
+                    if (numBits < 0 || pos + numBits > bits)
+                    {
+                        return;
+                    }
+
+                    if (numBits is 8 or 16 or 24 or 32 or 40)
+                    {
+                        var start = pos;
+                        uint guid = 0;
+                        for (var shift = 0; pos < start + numBits; shift += 7)
+                        {
+                            var b = Read(8);
+                            guid |= (b >> 1) << shift;
+                            if ((b & 1) == 0)
+                            {
+                                break;
+                            }
+                        }
+
+                        pos = start + numBits;
+                        if (_treasureHandlerGuids.TryGetValue(guid, out var handler))
+                        {
+                            var owner = channel < Channels.Length ? Channels[channel]?.ActorId ?? 0 : 0;
+                            _playerStateKeys.TryGetValue(owner, out var ownerKey);
+                            if (!Prizes.Any(p => p.Source == "habilidad" && p.OwnerPersistentId == owner && p.Tier == elementId))
+                            {
+                                _abilityGrants++;
+                                Prizes.Add(new PrizeEvent
+                                {
+                                    TimeSeconds = NowSeconds,
+                                    PrizeTemplateId = null,
+                                    TierData = handler,
+                                    Success = true,
+                                    Tier = elementId,
+                                    OpeningPawn = owner,
+                                    OwnerPersistentId = owner,
+                                    OwnerKey = ownerKey,
+                                    ClassName = "GA_TreasureHandler",
+                                    Source = "habilidad"
+                                });
+                            }
+                        }
+                    }
+                    else
+                    {
+                        pos += numBits;
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IndexOutOfRangeException or InvalidDataException)
+        {
+            // No era una lista de habilidades: se ignora.
+        }
     }
 
     private void TrackPickup(uint channelIndex, INetFieldExportGroup exportGroup)

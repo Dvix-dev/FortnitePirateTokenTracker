@@ -99,6 +99,19 @@ if (command == "probe")
         Console.WriteLine($"  {count,5}x lee={reader.WillReadGroup(path)} {path}");
     }
 
+    Console.WriteLine($"Habilidades: payloads={reader.AbilityPayloads} premios={reader.AbilityGrants} clases=[{string.Join(", ", reader.TreasureHandlerClasses)}]");
+
+    Console.WriteLine("Grupos de habilidades:");
+    foreach (var (path, count) in reader.GroupPaths
+                 .Where(kv => kv.Key.Contains("Ability", StringComparison.OrdinalIgnoreCase)
+                              || kv.Key.Contains("GameplayEffect", StringComparison.OrdinalIgnoreCase)
+                              || kv.Key.Contains("GameplayTag", StringComparison.OrdinalIgnoreCase))
+                 .OrderByDescending(kv => kv.Value)
+                 .Take(20))
+    {
+        Console.WriteLine($"  {count,5}x lee={reader.WillReadGroup(path)} {path}");
+    }
+
     Console.WriteLine("Tags de premio en caché:");
     foreach (var tag in reader.InterestingTags().Take(20))
     {
