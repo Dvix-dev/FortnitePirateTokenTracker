@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FortnitePirateTokenTracker.App/FortnitePirateTokenTracker.App.csproj" />
+    <Project Path="src/FortnitePirateTokenTracker.Core/FortnitePirateTokenTracker.Core.csproj" />
+  </Folder>
+</Solution>

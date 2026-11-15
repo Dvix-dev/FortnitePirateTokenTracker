@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Tracker · Panel</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">◈</span>
+    <span class="brand-name">TOKEN TRACKER</span>
+  </div>
+  <div class="topbar-actions">
+    <span class="status-dot" id="statusDot"></span>
+    <span class="status-text" id="statusText">Sin analizar</span>
+    <button class="btn btn-primary" id="scanBtn">Analizar ahora</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab is-active" data-view="resumen">Resumen</button>
+  <button class="tab" data-view="cofres">Cofres y Tokens</button>
+  <button class="tab" data-view="premios">Premios</button>
+  <button class="tab" data-view="cosmeticos">Cosméticos</button>
+  <button class="tab" data-view="partidas">Partidas</button>
+  <button class="tab" data-view="zonas">Zonas</button>
+  <button class="tab" data-view="configuracion">Configuración</button>
+  <button class="tab" data-view="guia">Guía</button>
+</nav>
+
+<main>
+  <!-- RESUMEN -->
+  <section class="view is-active" id="view-resumen">
+    <h1 class="hero-title">Tu caza del Token pirata</h1>
+    <p class="hero-sub">Cofres abiertos, Tokens propios y ajenos, y tasa de aparición por partida, calculado solo con tus repeticiones locales.</p>
+
+    <div class="grid-stats" id="statsGrid"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Ritmo de aparición</h2>
+        <span class="pill pill-gold" id="tokenRatePill">—</span>
+      </div>
+      <p class="muted" id="rateNote">Analiza tus repeticiones para calcular la tasa real.</p>
+      <div class="bars" id="rateBars"></div>
+    </div>
+
+    <div class="card" id="warningCard" hidden>
+      <div class="card-head">
+        <h2>Avisos del analizador</h2>
+        <span class="pill" id="warningCount">0</span>
+      </div>
+      <ul class="plain-list" id="warningList"></ul>
+    </div>
+  </section>
+
+  <!-- COFRES -->
+  <section class="view" id="view-cofres">
+    <h1 class="hero-title">Cofres y Tokens</h1>
+    <p class="hero-sub">Cada apertura detectada en tus repeticiones, con tiempo, contenedor y confianza de detección.</p>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Eventos detectados</h2>
+        <label class="switch">
+          <input type="checkbox" id="onlyTokens">
+          <span>Solo Tokens</span>
+        </label>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="chestTable">
+          <thead>
+            <tr>
+              <th>Partida</th><th>Tiempo</th><th>Contenedor</th><th>Jugador</th>
+              <th>Conf.</th><th class="num">X</th><th class="num">Y</th><th>Zona</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="empty" id="chestEmpty" hidden>Sin cofres registrados todavía.</p>
+      <p class="muted small" id="chestAttributionNote"></p>
+    </div>
+
+    <div class="card soft">
+      <h2>Cómo se clasifica</h2>
+      <ul class="plain-list">
+        <li><span class="conf conf-a">A</span> El premio del cofre coincide con el identificador del Token.</li>
+        <li><span class="conf conf-b">B</span> Cofre con estado de apertura y pickup asociado al evento.</li>
+        <li><span class="conf conf-c">C</span> Apertura detectada sin identificar el premio.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- PREMIOS -->
+  <section class="view" id="view-premios">
+    <h1 class="hero-title">Premios y probabilidades</h1>
+    <p class="hero-sub">Probabilidades publicadas por cofre abierto en partida normal. Son referencia del evento, no un cálculo de tus repeticiones.</p>
+    <div class="prize-list" id="prizeList"></div>
+    <p class="muted small">Fuente de las tasas: fortnite.bot/treasure. Los contadores de tu cuenta se basan solo en las repeticiones analizadas.</p>
+  </section>
+
+  <!-- COSMÉTICOS -->
+  <section class="view" id="view-cosmeticos">
+    <h1 class="hero-title">Cosméticos detectados</h1>
+    <p class="hero-sub">Outfit, pico, mochila, planeadora, pantalla de carga y pack de música que las repeticiones replican de cada jugador.</p>
+    <div class="players" id="playersGrid"></div>
+    <p class="empty" id="cosmeticEmpty" hidden>Sin cosméticos detectados todavía.</p>
+    <p class="muted small">Las repeticiones actuales del juego llegan con los campos de personalización vacíos en el lector oficial; esta vista se llenará cuando el lector extendido los lea del loadout replicado.</p>
+  </section>
+
+  <!-- PARTIDAS -->
+  <section class="view" id="view-partidas">
+    <h1 class="hero-title">Partidas</h1>
+    <p class="hero-sub">Una entrada por archivo de repetición analizado.</p>
+    <div class="matches" id="matchesList"></div>
+    <p class="empty" id="matchesEmpty" hidden>Sin partidas analizadas todavía.</p>
+  </section>
+
+  <!-- ZONAS -->
+  <section class="view" id="view-zonas">
+    <h1 class="hero-title">Zonas</h1>
+    <p class="hero-sub">Agrupación de los cofres por celdas de 50 m para ver dónde aparece el Token.</p>
+    <div class="zones" id="zonesList"></div>
+    <p class="empty" id="zonesEmpty" hidden>Sin coordenadas registradas todavía.</p>
+  </section>
+
+  <!-- CONFIGURACIÓN -->
+  <section class="view" id="view-configuracion">
+    <h1 class="hero-title">Configuración</h1>
+    <p class="hero-sub">Todo se guarda en <code>data/config.json</code>, en tu equipo.</p>
+
+    <form class="card form" id="configForm">
+      <label class="field">
+        <span>Carpeta de repeticiones</span>
+        <input type="text" id="cfgReplayFolder" spellcheck="false">
+        <small id="folderHint">Ruta por defecto de Fortnite. Debe contener archivos .replay.</small>
+      </label>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Radio de relevancia (metros)</span>
+          <input type="number" id="cfgRadius" min="50" max="5000" step="50">
+        </label>
+        <label class="field">
+          <span>Puerto del panel</span>
+          <input type="number" id="cfgPort" min="1024" max="65535">
+        </label>
+      </div>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Confianza mínima</span>
+          <select id="cfgConfidence">
+            <option value="A">A · solo premio confirmado</option>
+            <option value="B">B · apertura + pickup</option>
+            <option value="C">C · cualquier apertura</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Separador del CSV</span>
+          <select id="cfgSeparator">
+            <option value=";">punto y coma (Excel es)</option>
+            <option value=",">coma</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="check">
+        <input type="checkbox" id="cfgAnonymize">
+        <span>Anonimizar nombres de jugadores al exportar</span>
+      </label>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Guardar configuración</button>
+        <span class="muted small" id="saveState"></span>
+      </div>
+    </form>
+
+    <div class="card soft">
+      <h2>Rutas de salida</h2>
+      <ul class="plain-list mono" id="pathsList"></ul>
+    </div>
+  </section>
+
+  <!-- GUÍA -->
+  <section class="view" id="view-guia">
+    <h1 class="hero-title">Guía rápida</h1>
+    <p class="hero-sub">De cero a datos en cuatro pasos.</p>
+
+    <ol class="steps">
+      <li>
+        <h3>Activa las repeticiones en Fortnite</h3>
+        <p>Ajustes → Juego → Repeticiones → <strong>Grabar repeticiones</strong>. Fortnite guarda un archivo por partida al terminar y solo entonces escribe la clave que permite leerlo.</p>
+      </li>
+      <li>
+        <h3>Comprueba la carpeta</h3>
+        <p>La ruta por defecto es <code>%LOCALAPPDATA%\FortniteGame\Saved\Demos</code>. Si tienes los archivos en otro sitio, cámbiala en Configuración.</p>
+      </li>
+      <li>
+        <h3>Analiza</h3>
+        <p>Pulsa <strong>Analizar ahora</strong>. También puedes usar la consola: <code>TokenTracker analyze --limit 5</code>. Los archivos ya procesados se omiten gracias a la caché.</p>
+      </li>
+      <li>
+        <h3>Lee los resultados</h3>
+        <p>Resumen para la tasa de aparición, Cofres para el detalle, Zonas para la geografía y Partidas para el histórico. Todo se exporta a <code>data/resultados_token.csv</code> y <code>data/report.json</code>.</p>
+      </li>
+    </ol>
+
+    <div class="card">
+      <h2>Problemas frecuentes</h2>
+      <dl class="faq">
+        <dt>La carpeta aparece vacía</dt>
+        <dd>Fortnite borra repeticiones antiguas. Activa la grabación y juega una partida completa.</dd>
+        <dt>Una partida no se puede leer</dt>
+        <dd>Si la partida no terminó, el archivo no tiene clave de cifrado. El analizador lo marca como error y sigue con el resto.</dd>
+        <dt>No aparecen Tokens</dt>
+        <dd>El Tokens se identifica por el premio del cofre. Si tu versión del juego usa un identificador nuevo, la apertura se cuenta con confianza C y queda listada para revisión.</dd>
+        <dt>Los nombres no coinciden con el juego</dt>
+        <dd>Desactiva la anonimización en Configuración para ver los nombres tal cual los replica la repetición.</dd>
+      </dl>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<footer class="footer">
+  Solo lectura de archivos locales · sin conexión a Epic · <span id="footerVersion"></span>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

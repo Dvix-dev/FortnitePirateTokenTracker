@@ -1,1 +1,18 @@
 /.freebuff
+
+# SDK de .NET instalado localmente en el proyecto
+.dotnet/
+tools/dotnet-install.ps1
+
+# Compilación
+bin/
+obj/
+*.user
+
+# Entradas y salidas del analizador (contienen nombres de jugadores)
+data/replays/
+data/scan/
+data/cache/
+data/*.json
+data/*.csv
+!data/catalog/
