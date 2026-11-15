@@ -293,20 +293,90 @@ document.querySelectorAll('.tab').forEach((tab) => {
 
 $('onlyTokens').addEventListener('change', renderChests);
 
-$('scanBtn').addEventListener('click', async () => {
-  const button = $('scanBtn');
+function openScanModal() {
+  const total = state.replayCount ?? 0;
+  $('choiceAllCount').textContent = total ? `${total} archivos` : 'sin archivos';
+  $('scanModalInfo').textContent = total
+    ? `Hay ${total} repeticiones en la carpeta. Elige cuántas procesar.`
+    : 'No hay repeticiones en la carpeta configurada.';
+  $('scanCustom').value = '';
+  document.querySelector('input[name="scanCount"][value="all"]').checked = true;
+  $('scanModal').hidden = false;
+  $('scanCustom').focus();
+}
+
+function closeScanModal() {
+  $('scanModal').hidden = true;
+}
+
+function readScanLimit() {
+  const custom = $('scanCustom').value.trim();
+  if (custom !== '') {
+    const parsed = Number(custom);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      throw new Error('Escribe una cantidad mayor que cero');
+    }
+    return Math.min(Math.floor(parsed), 5000);
+  }
+
+  const selected = document.querySelector('input[name="scanCount"]:checked');
+  if (!selected || selected.value === 'all') {
+    return null;
+  }
+
+  return Number(selected.value);
+}
+
+async function runScan(limit) {
+  const button = $('scanConfirm');
+  const topButton = $('scanBtn');
   button.disabled = true;
+  topButton.disabled = true;
   button.textContent = 'Analizando…';
+
   try {
-    await api('/api/scan', { method: 'POST', body: '{}' });
+    await api('/api/scan', { method: 'POST', body: JSON.stringify({ limit }) });
     await load();
-    toast('Análisis completado');
+    closeScanModal();
+    toast(limit ? `Analizadas las últimas ${limit} partidas` : 'Análisis completado');
   } catch (error) {
     toast(error.message, true);
   } finally {
     button.disabled = false;
-    button.textContent = 'Analizar ahora';
+    topButton.disabled = false;
+    button.textContent = 'Analizar';
   }
+}
+
+$('scanBtn').addEventListener('click', openScanModal);
+
+$('scanConfirm').addEventListener('click', () => {
+  try {
+    const limit = readScanLimit();
+    runScan(limit);
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+$('scanModal').addEventListener('click', (event) => {
+  if (event.target.hasAttribute('data-close')) {
+    closeScanModal();
+  }
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !$('scanModal').hidden) {
+    closeScanModal();
+  }
+});
+
+$('scanCustom').addEventListener('input', () => {
+  document.querySelectorAll('input[name="scanCount"]').forEach((radio) => { radio.checked = false; });
+});
+
+document.querySelectorAll('input[name="scanCount"]').forEach((radio) => {
+  radio.addEventListener('change', () => { $('scanCustom').value = ''; });
 });
 
 $('configForm').addEventListener('submit', async (event) => {

@@ -225,6 +225,45 @@
   </section>
 </main>
 
+<div class="modal" id="scanModal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="scanModalTitle">
+    <h2 id="scanModalTitle">Analizar repeticiones</h2>
+    <p class="muted small" id="scanModalInfo">Elige cuántas partidas quieres procesar.</p>
+
+    <div class="choice-grid" id="scanChoices">
+      <label class="choice">
+        <input type="radio" name="scanCount" value="all" checked>
+        <span>Todas</span>
+        <small id="choiceAllCount"></small>
+      </label>
+      <label class="choice">
+        <input type="radio" name="scanCount" value="10">
+        <span>Últimas 10</span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="scanCount" value="25">
+        <span>Últimas 25</span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="scanCount" value="50">
+        <span>Últimas 50</span>
+      </label>
+    </div>
+
+    <label class="field">
+      <span>Cantidad personalizada</span>
+      <input type="number" id="scanCustom" min="1" max="5000" placeholder="Ej. 5" inputmode="numeric">
+      <small>Si rellenas este campo, se ignoran las opciones de arriba.</small>
+    </label>
+
+    <div class="modal-actions">
+      <button type="button" class="btn" data-close>Cancelar</button>
+      <button type="button" class="btn btn-primary" id="scanConfirm">Analizar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" hidden></div>
 
 <footer class="footer">
