@@ -7,6 +7,13 @@
   --muted: #9b9ba6;
   --gold: #ffd400;
   --gold-ink: #1a1600;
+  --gold-hi: #fff4b0;
+  --gold-2: #ffe97a;
+  --gold-3: #f6c500;
+  --gold-4: #c99700;
+  --gold-grad: linear-gradient(180deg, var(--gold-hi) 0%, var(--gold-2) 22%, var(--gold) 52%, var(--gold-3) 78%, var(--gold-4) 100%);
+  --gold-grad-soft: linear-gradient(135deg, rgba(255, 231, 122, 0.22), rgba(255, 180, 0, 0.06));
+  --gold-edge: rgba(255, 212, 0, 0.35);
   --radius: 16px;
 }
 
@@ -15,7 +22,12 @@
 html, body { margin: 0; padding: 0; }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(900px 420px at 50% -200px, rgba(255, 212, 0, 0.13), transparent 70%),
+    radial-gradient(700px 340px at 100% -40px, rgba(255, 166, 0, 0.07), transparent 72%),
+    radial-gradient(600px 320px at 0% 10%, rgba(255, 212, 0, 0.04), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 15px;
@@ -48,7 +60,8 @@ code, .mono {
   padding: 14px 22px;
   background: rgba(10, 10, 11, 0.86);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, rgba(255, 212, 0, 0.25), transparent) 1;
 }
 
 .brand { display: flex; align-items: center; gap: 10px; }
@@ -58,8 +71,9 @@ code, .mono {
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: 9px;
-  background: rgba(255, 212, 0, 0.08);
+  border-radius: 10px;
+  background: var(--gold-grad-soft);
+  box-shadow: inset 0 0 0 1px var(--gold-edge), 0 6px 18px rgba(255, 190, 0, 0.14);
   font-size: 16px;
   font-weight: 900;
   overflow: hidden;
@@ -73,6 +87,10 @@ code, .mono {
   font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.08em;
+  background: linear-gradient(180deg, #ffffff, #cfcfd8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
@@ -108,12 +126,22 @@ code, .mono {
 .btn:disabled { opacity: 0.5; cursor: progress; }
 
 .btn-primary {
-  background: var(--gold);
-  border-color: var(--gold);
+  background: var(--gold-grad);
+  border-color: var(--gold-4);
   color: var(--gold-ink);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -2px 0 rgba(150, 105, 0, 0.35),
+    0 8px 22px rgba(255, 186, 0, 0.22);
 }
 
-.btn-primary:hover { background: #ffe14d; }
+.btn-primary:hover {
+  background: var(--gold-grad);
+  filter: brightness(1.07) saturate(1.05);
+}
+
+.btn-primary:active { filter: brightness(0.97); }
 
 /* ---------- pestañas ---------- */
 
@@ -145,7 +173,10 @@ code, .mono {
 
 .tab.is-active {
   color: var(--gold-ink);
-  background: var(--gold);
+  background: var(--gold-grad);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 6px 16px rgba(255, 186, 0, 0.2);
 }
 
 /* ---------- estructura ---------- */
@@ -166,6 +197,10 @@ main {
 
 .hero-title {
   margin: 0 0 6px;
+  background: linear-gradient(180deg, #ffffff 30%, #d5d5dd 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
   font-size: clamp(28px, 5vw, 42px);
   font-weight: 900;
   text-transform: uppercase;
@@ -196,11 +231,14 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 /* ---------- tarjetas ---------- */
 
 .card {
-  background: var(--card);
+  background: linear-gradient(180deg, #18181d 0%, #131316 55%, #101013 100%);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
   margin-bottom: 16px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 18px 40px -30px rgba(0, 0, 0, 0.9);
 }
 
 .card.soft { background: #101014; }
@@ -225,7 +263,12 @@ h3 { margin: 0 0 6px; font-size: 15px; }
   text-transform: uppercase;
 }
 
-.pill-gold { background: rgba(255, 212, 0, 0.14); color: var(--gold); }
+.pill-gold {
+  background: var(--gold-grad-soft);
+  border: 1px solid var(--gold-edge);
+  color: #ffe98a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
 
 /* ---------- métricas ---------- */
 
@@ -237,10 +280,18 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 }
 
 .stat {
-  background: var(--card);
+  background: linear-gradient(180deg, #18181d 0%, #121215 100%);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.stat.is-gold {
+  border-color: rgba(255, 212, 0, 0.22);
+  background:
+    radial-gradient(240px 120px at 20% -20%, rgba(255, 212, 0, 0.12), transparent 70%),
+    linear-gradient(180deg, #1a1a20, #111114);
 }
 
 .stat-label {
@@ -260,7 +311,13 @@ h3 { margin: 0 0 6px; font-size: 15px; }
   line-height: 1;
 }
 
-.stat.is-gold .stat-value { color: var(--gold); }
+.stat.is-gold .stat-value {
+  background: var(--gold-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 12px rgba(255, 186, 0, 0.28));
+}
 
 .stat-sub { margin-top: 6px; font-size: 12px; color: var(--muted); }
 
@@ -286,7 +343,8 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 .bar-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #ffd400, #ffab00);
+  background: linear-gradient(90deg, var(--gold-4), var(--gold) 45%, var(--gold-hi) 100%);
+  box-shadow: 0 0 14px rgba(255, 190, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
 /* ---------- premios ---------- */
@@ -304,6 +362,7 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 }
 
 .prize-thumb {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), 0 6px 16px -8px rgba(255, 186, 0, 0.5);
   width: 48px;
   height: 48px;
   flex: 0 0 48px;
@@ -327,7 +386,14 @@ h3 { margin: 0 0 6px; font-size: 15px; }
   white-space: nowrap;
 }
 
-.prize-odds { font-weight: 900; font-size: 13px; }
+.prize-odds {
+  font-weight: 900;
+  font-size: 13px;
+  background: linear-gradient(180deg, #fff9d6, var(--gold) 60%, var(--gold-3));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 
 .prize-found { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 
@@ -361,6 +427,8 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 
 .data-table tr:last-child td { border-bottom: 0; }
 
+.data-table tbody tr:hover td { background: rgba(255, 212, 0, 0.035); }
+
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .tag {
@@ -373,7 +441,11 @@ h3 { margin: 0 0 6px; font-size: 15px; }
   color: #cfcfd8;
 }
 
-.tag-local { background: rgba(255, 212, 0, 0.16); color: var(--gold); }
+.tag-local {
+  background: var(--gold-grad-soft);
+  border: 1px solid var(--gold-edge);
+  color: #ffe98a;
+}
 
 .conf {
   display: inline-grid;
@@ -386,7 +458,11 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 }
 
 .conf-a { background: rgba(61, 220, 151, 0.16); color: #3ddc97; }
-.conf-b { background: rgba(255, 212, 0, 0.16); color: var(--gold); }
+.conf-b {
+  background: var(--gold-grad-soft);
+  box-shadow: inset 0 0 0 1px var(--gold-edge);
+  color: #ffe98a;
+}
 .conf-c { background: #26262e; color: var(--muted); }
 
 /* ---------- cosméticos ---------- */
@@ -538,12 +614,13 @@ input:focus, select:focus { outline: 2px solid rgba(255, 212, 0, 0.35); outline-
   width: 26px;
   height: 26px;
   border-radius: 8px;
-  background: var(--gold);
+  background: var(--gold-grad);
   color: var(--gold-ink);
   display: grid;
   place-items: center;
   font-weight: 900;
   font-size: 13px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 6px 14px rgba(255, 186, 0, 0.22);
 }
 
 .steps p { margin: 0; color: var(--muted); font-size: 13px; }
@@ -586,11 +663,17 @@ input:focus, select:focus { outline: 2px solid rgba(255, 212, 0, 0.35); outline-
 .modal-card {
   position: relative;
   width: min(440px, 100%);
-  background: var(--card);
+  background:
+    radial-gradient(420px 180px at 50% -80px, rgba(255, 212, 0, 0.12), transparent 70%),
+    linear-gradient(180deg, #191920, #121216);
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 20px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  border-color: rgba(255, 212, 0, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 24px 60px rgba(0, 0, 0, 0.65),
+    0 0 80px -30px rgba(255, 186, 0, 0.35);
   display: grid;
   gap: 14px;
   animation: fade 0.15s ease-out;
