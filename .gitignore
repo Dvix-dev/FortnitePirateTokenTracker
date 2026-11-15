@@ -19,3 +19,6 @@ data/*.csv
 
 # Clon temporal usado para estudiar la implementación de referencia
 /tmp_cc/
+
+# Capturas de revisión visual
+/screenshot.png
