@@ -76,6 +76,14 @@ public sealed class ReplayAnalyzer
             var key = Path.GetFileName(file);
             onDisk.Add(key);
 
+            // Una repetición que acaba de cambiar se está grabando: se deja para el próximo
+            // análisis en vez de guardar un resultado vacío.
+            if (!force && (DateTime.UtcNow - info.LastWriteTimeUtc).TotalSeconds < 90)
+            {
+                Log?.Invoke($"... {key} (grabándose)");
+                continue;
+            }
+
             _cache.Entries.TryGetValue(key, out var previous);
 
             if (!force && previous is not null
@@ -155,7 +163,11 @@ public sealed class ReplayAnalyzer
 
         try
         {
-            using var stream = File.OpenRead(file);
+            // Fortnite mantiene la repetición abierta mientras graba: se abre en modo
+            // compartido para poder leerla igualmente (y reintentar si aún está a medias).
+            using var stream = new FileStream(
+                file, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
             replay = reader.ReadReplay(stream);
         }
         catch (Exception ex)
