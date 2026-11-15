@@ -113,6 +113,17 @@
   <section class="view" id="view-premios">
     <h1 class="hero-title">Premios y probabilidades</h1>
     <p class="hero-sub">Probabilidades publicadas por cofre abierto en partida normal. Son referencia del evento, no un cálculo de tus repeticiones.</p>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Tesoros que te han salido</h2>
+        <span class="pill pill-gold" id="treasureCount">0</span>
+      </div>
+      <p class="muted small">Premios concedidos en tus repeticiones. Cuando la repetición no envía el identificador del premio, se muestra quién lo recibió y en qué momento.</p>
+      <ul class="plain-list" id="treasureList"></ul>
+      <p class="empty" id="treasureEmpty" hidden>Todavía no hay ningún tesoro en tus repeticiones.</p>
+    </div>
+
     <div class="prize-list" id="prizeList"></div>
     <p class="muted small">Fuente de las tasas: fortnite.bot/treasure. Los contadores de tu cuenta se basan solo en las repeticiones analizadas.</p>
   </section>

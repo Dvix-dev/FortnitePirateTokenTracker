@@ -131,6 +131,23 @@ function renderChests() {
 /* ---------------- premios ---------------- */
 
 function renderPrizes() {
+  const treasures = (state.report?.chests ?? [])
+    .filter((c) => /tesoro|dorado/i.test(c.containerClass || ''))
+    .sort((a, b) => (b.timeMs ?? 0) - (a.timeMs ?? 0));
+
+  $('treasureCount').textContent = treasures.length;
+  $('treasureEmpty').hidden = treasures.length > 0;
+  $('treasureList').innerHTML = treasures.slice(0, 30).map((c) => {
+    const seconds = Math.floor((c.timeMs ?? 0) / 1000);
+    const when = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    const who = c.isLocalPlayer ? 'tú' : (c.playerName || 'sin identificar');
+    // Los análisis antiguos pudieron guardar basura del parser anterior como identificador.
+    const raw = c.itemId || '';
+    const label = raw && !/cosmetics\.variant|immutable/i.test(raw) ? raw : 'premio sin identificar';
+    const source = /dorado/i.test(c.containerClass || '') ? 'cofre dorado' : 'habilidad del evento';
+    return `<li><strong>${esc(label)}</strong> · ${esc(who)} · ${when} · ${esc(source)} · ${esc((c.replayFile || '').replace('.replay', ''))}</li>`;
+  }).join('');
+
   const found = new Map((state.report?.categories ?? []).map((c) => [c.key, c.found]));
   $('prizeList').innerHTML = state.catalog.map((prize) => `
     <div class="prize">
