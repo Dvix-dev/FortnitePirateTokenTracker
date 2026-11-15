@@ -2,5 +2,6 @@
   <Folder Name="/src/">
     <Project Path="src/FortnitePirateTokenTracker.App/FortnitePirateTokenTracker.App.csproj" />
     <Project Path="src/FortnitePirateTokenTracker.Core/FortnitePirateTokenTracker.Core.csproj" />
+    <Project Path="src/FortnitePirateTokenTracker.ReplayReader/FortnitePirateTokenTracker.ReplayReader.csproj" />
   </Folder>
 </Solution>

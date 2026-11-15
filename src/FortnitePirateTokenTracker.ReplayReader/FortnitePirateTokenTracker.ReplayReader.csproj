@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    El constructor de Unreal.Core.NetFieldParser registra los [NetFieldExportGroup]
+    de los ensamblados cuyo nombre contiene "ReplayReader". Por eso este proyecto
+    se llama así: es la forma de registrar grupos propios sin parchear el parser.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <RootNamespace>FortnitePirateTokenTracker.ReplayReader</RootNamespace>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FortniteReplayReader" Version="3.1.0" />
+  </ItemGroup>
+
+</Project>

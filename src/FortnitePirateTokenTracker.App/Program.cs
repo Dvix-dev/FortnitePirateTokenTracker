@@ -41,6 +41,8 @@ if (command is "help" or "-h" or "--help")
         --limit <n>                   Procesa solo las n repeticiones más recientes
         --force                       Ignora la caché
       TokenTracker probe <archivo>    Volcado de depuración de una repetición
+      TokenTracker discover           Inventaría grupos, campos y pickups de varias repeticiones
+        --limit <n>                   Cuántas repeticiones inventariar (por defecto 10)
       TokenTracker config             Muestra la configuración actual
     """);
     return 0;
@@ -131,6 +133,22 @@ if (command == "probe")
         }
     }
 
+    const string treasureChestPath = "/DelilahTreasureHuntGameplay/Gameplay/Actors/BGA_DelilahTreasureHuntAnimatedChest.BGA_DelilahTreasureHuntAnimatedChest_C";
+    Console.WriteLine($"Grupo del cofre dorado registrado: {reader.WillReadGroup(treasureChestPath)}");
+    if (reader.GroupFieldDetails.TryGetValue(treasureChestPath, out var treasureFields))
+    {
+        Console.WriteLine("Campos del cofre dorado:");
+        foreach (var field in treasureFields.Take(20))
+        {
+            Console.WriteLine($"  {field}");
+        }
+    }
+    Console.WriteLine($"Cofres dorados del evento: {reader.Prizes.Count}");
+    foreach (var prize in reader.Prizes)
+    {
+        Console.WriteLine($"  [{prize.TimeSeconds,7:0.0}s] prize={prize.PrizeTemplateId ?? "-"} tierData={prize.TierData ?? "-"} success={prize.Success} tier={prize.Tier} pawn={prize.OpeningPawn} owner={prize.OwnerPersistentId}");
+    }
+
     Console.WriteLine($"Partidas/jugadores: players={match.Players} local={match.LocalPlayerFound} modo={match.Mode} duración={match.LengthSeconds}s");
     Console.WriteLine($"Cosméticos detectados: {match.Cosmetics.Count}");
     foreach (var cosmetic in match.Cosmetics.Take(8))
@@ -140,6 +158,12 @@ if (command == "probe")
 
     Console.WriteLine($"Errores de parseo del analizador: {match.Error ?? "ninguno"}");
     return 0;
+}
+
+if (command == "discover")
+{
+    var discoveryLimit = int.TryParse(Flag("--limit"), out var parsedDiscoveryLimit) ? parsedDiscoveryLimit : 10;
+    return FortnitePirateTokenTracker.App.Discovery.DiscoveryRunner.Run(config, dataDir, discoveryLimit);
 }
 
 if (command == "analyze")

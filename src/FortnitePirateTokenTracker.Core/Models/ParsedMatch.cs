@@ -23,6 +23,7 @@ public sealed class ParsedChest
     public string ContainerClass { get; set; } = "";
     public string? ItemId { get; set; }
     public bool IsToken { get; set; }
+    public string? Category { get; set; }
     public string Confidence { get; set; } = "C";
     public string? PlayerName { get; set; }
     public bool IsLocalPlayer { get; set; }

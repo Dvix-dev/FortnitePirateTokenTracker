@@ -13,8 +13,7 @@ public static class TreasureCatalog
     {
         new("outfit", "Skin semanal (Gold Outfit)", "1 en 1.562.500", "#ffd400",
             "Traje dorado de la semana del evento.", "outfit.webp"),
-        new("shopAccess", "Acceso a la tienda pirata", "1 en 137.500", "#ff8a00",
-            "Acceso al catálogo del evento.", "shop.webp"),
+
         new("vehicle", "Vehículo y decal", "1 en 7.813", "#7b5cff",
             "Vehículo o decal dorado de la semana.", "vehicle.webp"),
         new("pickaxe", "Pico o mochila", "1 en 568", "#c86bff",
@@ -25,9 +24,60 @@ public static class TreasureCatalog
             "Pantalla de carga del evento.", "loading.webp"),
         new("gizmo", "Gizmo (cualquiera)", "1 en 127", "#ff5d5d",
             "Sprite/gizmo de extracción o localización.", "gizmo.webp"),
-        new("token", "Token pirata", "—", "#ffffff",
-            "Ítem del evento que rastrea esta herramienta.", "token.webp")
+        new("token", "Token pirata · acceso a la tienda", "1 en 137.500", "#ffd400",
+            "El token del evento: desbloquea el catálogo de la tienda pirata.", "token.webp")
     };
+
+    /// <summary>
+    /// Clasifica el identificador de premio que replica el cofre dorado.
+    /// Los nombres provienen del propio juego, así que se comparan por fragmentos.
+    /// </summary>
+    public static string? ClassifyPrize(string prizeId)
+    {
+        if (string.IsNullOrWhiteSpace(prizeId))
+        {
+            return null;
+        }
+
+        var id = prizeId.ToLowerInvariant();
+
+        if (id.Contains("token") || id.Contains("pirateshop") || id.Contains("shopaccess"))
+        {
+            return "token";
+        }
+
+        if (id.Contains("vehicle") || id.Contains("decal") || id.Contains("car"))
+        {
+            return "vehicle";
+        }
+
+        if (id.Contains("loadingscreen") || id.Contains("loadings"))
+        {
+            return "loadingScreen";
+        }
+
+        if (id.Contains("musicpack") || id.Contains("jamtrack") || id.Contains("music"))
+        {
+            return "jamTrack";
+        }
+
+        if (id.Contains("pickaxe") || id.Contains("harvestingtool") || id.Contains("backpack") || id.Contains("backbling"))
+        {
+            return "pickaxe";
+        }
+
+        if (id.Contains("sprite") || id.Contains("gizmo") || id.Contains("extractor") || id.Contains("locator"))
+        {
+            return "gizmo";
+        }
+
+        if (id.Contains("character") || id.Contains("outfit") || id.Contains("skin"))
+        {
+            return "outfit";
+        }
+
+        return null;
+    }
 
     public static Prize? ByKey(string key) =>
         Prizes.FirstOrDefault(p => string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase));

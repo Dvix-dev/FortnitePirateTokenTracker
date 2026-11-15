@@ -74,7 +74,7 @@ public static class ReportBuilder
                     IsToken = chest.IsToken,
                     Confidence = chest.Confidence,
                     ItemId = chest.ItemId,
-                    Category = chest.IsToken ? "token" : null,
+                    Category = chest.Category ?? (chest.IsToken ? "token" : null),
                     X = Math.Round(chest.X, 1),
                     Y = Math.Round(chest.Y, 1),
                     Z = Math.Round(chest.Z, 1),

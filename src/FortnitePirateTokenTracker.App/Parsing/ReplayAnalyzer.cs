@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using FortnitePirateTokenTracker.Core.Catalog;
 using FortnitePirateTokenTracker.Core.Configuration;
 using FortnitePirateTokenTracker.Core.Models;
 using FortniteReplayReader.Models;
@@ -13,6 +14,9 @@ namespace FortnitePirateTokenTracker.App.Parsing;
 public sealed class ReplayAnalyzer
 {
     private const string CacheFileName = "parsed-replays.json";
+
+    /// <summary>Subir esto invalida la caché cuando cambian las reglas de detección.</summary>
+    private const string CurrentParserVersion = "3";
 
     private readonly AppConfig _config;
     private readonly string _dataDir;
@@ -207,6 +211,20 @@ public sealed class ReplayAnalyzer
             return;
         }
 
+        foreach (var prize in reader.Prizes.OrderBy(p => p.TimeSeconds))
+        {
+            parsed.Chests.Add(new ParsedChest
+            {
+                TimeMs = (int)Math.Round(prize.TimeSeconds * 1000),
+                ContainerClass = "Cofre dorado (tesoro)",
+                ItemId = prize.PrizeTemplateId,
+                IsToken = LooksLikeToken(prize.PrizeTemplateId),
+                Category = TreasureCatalog.ClassifyPrize(prize.PrizeTemplateId),
+                Confidence = string.IsNullOrWhiteSpace(prize.PrizeTemplateId) ? "B" : "A",
+                PositionApproximate = true
+            });
+        }
+
         foreach (var pickup in reader.Pickups.Where(p => LooksLikeToken(p.ItemId)))
         {
             parsed.Chests.Add(new ParsedChest
@@ -230,6 +248,8 @@ public sealed class ReplayAnalyzer
 
         return itemId.Contains("Token", StringComparison.OrdinalIgnoreCase)
                || itemId.Contains("PirateCoin", StringComparison.OrdinalIgnoreCase)
+               || itemId.Contains("PirateShop", StringComparison.OrdinalIgnoreCase)
+               || itemId.Contains("ShopAccess", StringComparison.OrdinalIgnoreCase)
                || itemId.Contains("GoldCoin", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -303,7 +323,14 @@ public sealed class ReplayAnalyzer
             if (File.Exists(_cachePath))
             {
                 var json = File.ReadAllText(_cachePath);
-                return JsonSerializer.Deserialize<CacheFile>(json, AppConfig.SerializerOptions) ?? new CacheFile();
+                var cache = JsonSerializer.Deserialize<CacheFile>(json, AppConfig.SerializerOptions) ?? new CacheFile();
+                if (cache.ParserVersion != CurrentParserVersion)
+                {
+                    // Cambiaron las reglas: se descarta lo cacheado para no servir datos viejos.
+                    return new CacheFile { ParserVersion = CurrentParserVersion };
+                }
+
+                return cache;
             }
         }
         catch
@@ -330,7 +357,7 @@ public sealed class ReplayAnalyzer
     private sealed class CacheFile
     {
         public int SchemaVersion { get; set; } = 1;
-        public string ParserVersion { get; set; } = "FortniteReplayReader-3.1.0";
+        public string ParserVersion { get; set; } = CurrentParserVersion;
         public Dictionary<string, CacheEntry> Entries { get; set; } = new();
     }
 

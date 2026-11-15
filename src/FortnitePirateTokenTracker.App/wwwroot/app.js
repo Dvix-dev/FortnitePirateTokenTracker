@@ -108,7 +108,7 @@ function renderChests() {
     <tr>
       <td class="mono">${esc(c.replayFile)}</td>
       <td class="mono">${esc(c.timeLabel)}</td>
-      <td>${esc(c.containerClass)}</td>
+      <td>${esc(c.containerClass)}${c.itemId ? `<div class="muted small mono">${esc(c.itemId)}</div>` : ''}</td>
       <td>${c.isLocalPlayer ? '<span class="tag tag-local">yo</span>' : esc(c.playerName ?? '—')}</td>
       <td><span class="conf conf-${esc((c.confidence || 'c').toLowerCase())}">${esc(c.confidence)}</span></td>
       <td class="num">${esc(c.x)}</td>

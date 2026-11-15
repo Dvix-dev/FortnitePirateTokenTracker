@@ -24,6 +24,19 @@ public sealed class ContainerSnapshot
     public bool HasPosition { get; set; }
 }
 
+/// <summary>Apertura del cofre dorado del evento, con el premio concedido.</summary>
+public sealed class PrizeEvent
+{
+    public double TimeSeconds { get; set; }
+    public string? PrizeTemplateId { get; set; }
+    public bool Success { get; set; }
+    public int? Tier { get; set; }
+    public uint? OpeningPawn { get; set; }
+    public uint? OwnerPersistentId { get; set; }
+    public string? TierData { get; set; }
+    public string ClassName { get; set; } = "";
+}
+
 /// <summary>Un pickup de ítem observado, útil para localizar el premio del cofre.</summary>
 public sealed class PickupSnapshot
 {
@@ -46,11 +59,27 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
     {
     }
 
+    /// <summary>Fuerza la carga del ensamblado de grupos propios antes de crear el parser.</summary>
+    private static readonly Type RegistrationAnchor = typeof(FortnitePirateTokenTracker.ReplayReader.ITrackedContainer);
+
     public List<ContainerSnapshot> Containers { get; } = new();
+    public List<PrizeEvent> Prizes { get; } = new();
     public List<PickupSnapshot> Pickups { get; } = new();
     public List<string> UnknownGroups { get; } = new();
+
+    /// <summary>Todos los grupos replicados vistos, con su número de apariciones.</summary>
+    public Dictionary<string, int> GroupPaths { get; } = new();
+
+    /// <summary>Nombres de campo declarados por los grupos relevantes para el evento.</summary>
+    public Dictionary<string, HashSet<string>> GroupFields { get; } = new();
+
+    /// <summary>Nombre y tipo declarado de cada campo, para elegir el lector correcto.</summary>
+    public Dictionary<string, List<string>> GroupFieldDetails { get; } = new();
     public List<string> Warnings { get; } = new();
     public List<string> Events { get; } = new();
+
+    /// <summary>Indica si el parser reconoce (y por tanto deserializa) un grupo por su ruta.</summary>
+    public bool WillReadGroup(string path) => _netFieldParser.WillReadType(path);
 
     protected override void OnExportRead(uint channelIndex, INetFieldExportGroup? exportGroup)
     {
@@ -70,7 +99,25 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
 
         try
         {
-            if (exportGroup is BaseContainer container)
+            if (exportGroup is FortnitePirateTokenTracker.ReplayReader.ITrackedContainer tracked)
+            {
+                TrackTrackedContainer(channelIndex, tracked);
+            }
+            else if (exportGroup is FortnitePirateTokenTracker.ReplayReader.TreasureHuntChest prizeChest)
+            {
+                Prizes.Add(new PrizeEvent
+                {
+                    TimeSeconds = NowSeconds,
+                    PrizeTemplateId = ReadTag(prizeChest.PrizeTemplateId),
+                    Success = prizeChest.bSuccess,
+                    Tier = prizeChest.Tier,
+                    OpeningPawn = prizeChest.OpeningPawn,
+                    OwnerPersistentId = prizeChest.OwnerPersistentId,
+                    TierData = ReadTag(prizeChest.TierData),
+                    ClassName = prizeChest.GetType().Name
+                });
+            }
+            else if (exportGroup is BaseContainer container)
             {
                 TrackContainer(channelIndex, container);
             }
@@ -122,18 +169,52 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         out INetFieldExportGroup? exportGroup, bool enablePropertyChecksum = true, bool netDeltaUpdate = false)
     {
         var path = group?.PathName ?? "";
-        if (path.Contains("Chest", StringComparison.OrdinalIgnoreCase)
-            || path.Contains("Container", StringComparison.OrdinalIgnoreCase)
-            || path.Contains("Pickup", StringComparison.OrdinalIgnoreCase))
+        GroupPaths[path] = GroupPaths.GetValueOrDefault(path) + 1;
+
+        if (IsInteresting(path))
         {
             if (!UnknownGroups.Contains(path))
             {
                 UnknownGroups.Add(path);
             }
+
+            if (!GroupFields.TryGetValue(path, out var fields))
+            {
+                fields = new HashSet<string>(StringComparer.Ordinal);
+                GroupFields[path] = fields;
+            }
+
+            if (!GroupFieldDetails.TryGetValue(path, out var details))
+            {
+                details = new List<string>();
+                GroupFieldDetails[path] = details;
+            }
+
+            foreach (var export in group.NetFieldExports)
+            {
+                if (export?.Name is { Length: > 0 } name)
+                {
+                    fields.Add(name);
+
+                    var detail = $"{name} [{export.Type}] handle={export.Handle}";
+                    if (!details.Contains(detail))
+                    {
+                        details.Add(detail);
+                    }
+                }
+            }
         }
 
         return base.ReceiveProperties(archive, group, channelIndex, out exportGroup, enablePropertyChecksum, netDeltaUpdate);
     }
+
+    private static readonly string[] InterestingKeywords =
+    {
+        "Chest", "Container", "Pickup", "Treasure", "Prize", "Gold", "Token", "Pirate", "Loot", "Reward"
+    };
+
+    private static bool IsInteresting(string path) =>
+        InterestingKeywords.Any(k => path.Contains(k, StringComparison.OrdinalIgnoreCase));
 
     private float _nowSeconds;
 
@@ -201,6 +282,32 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         }
     }
 
+    private void TrackTrackedContainer(uint channelIndex, FortnitePirateTokenTracker.ReplayReader.ITrackedContainer container)
+    {
+        _openedContainers.TryGetValue(channelIndex, out var wasOpened);
+
+        if (container.bAlreadySearched && !wasOpened)
+        {
+            _openedContainers[channelIndex] = true;
+
+            var snapshot = new ContainerSnapshot
+            {
+                ClassName = container.GetType().Name,
+                TimeSeconds = NowSeconds,
+                SearchAnimationCount = container.SearchAnimationCount,
+                LootTier = container.ReplicatedLootTier,
+                SearchingPawn = container.SearchingPawn?.ToString()
+            };
+
+            TryReadPosition(channelIndex, snapshot);
+            Containers.Add(snapshot);
+        }
+        else if (!container.bAlreadySearched)
+        {
+            _openedContainers[channelIndex] = false;
+        }
+    }
+
     private void TrackPickup(INetFieldExportGroup exportGroup)
     {
         var itemId = ReadItemId(exportGroup);
@@ -216,6 +323,36 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
             ItemId = itemId,
             Raw = Describe(exportGroup)
         });
+    }
+
+    /// <summary>Convierte una etiqueta de gameplay en texto legible sin acoplarse a su tipo.</summary>
+    private static string? ReadTag(object tag)
+    {
+        if (tag is null)
+        {
+            return null;
+        }
+
+        var tagName = ReadProperty(tag, "TagName") ?? ReadProperty(tag, "Tag");
+        if (tagName is not null)
+        {
+            var name = ReadProperty(tagName, "Name")?.ToString();
+            if (!string.IsNullOrWhiteSpace(name) && name != "None")
+            {
+                return name;
+            }
+
+            var text = tagName.ToString();
+            if (!string.IsNullOrWhiteSpace(text) && text != "None")
+            {
+                return text;
+            }
+        }
+
+        var fallback = tag.ToString();
+        return string.IsNullOrWhiteSpace(fallback) || fallback.StartsWith("Unreal.Core", StringComparison.Ordinal)
+            ? null
+            : fallback;
     }
 
     private static string? ReadItemId(object source)
