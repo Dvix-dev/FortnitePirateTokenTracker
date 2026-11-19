@@ -267,6 +267,116 @@ function renderMatches() {
   $('matchesEmpty').hidden = matches.length > 0;
 }
 
+/* ---------------- mapa de calor ---------------- */
+
+// Caja del mapa en píxeles de la imagen original y extensión del mundo que cubre.
+// Las celdas son las mismas de 50 m (5.000 unidades) que usa el informe.
+const MAP_IMG = { w: 560, h: 555, left: 30, top: 1, right: 520, bottom: 511 };
+const MAP_WORLD = { xMin: -60000, xMax: 94000, yMin: -62000, yMax: 98000 };
+const MAP_CELL = 5000;
+
+function mapPoint(x, y) {
+  const w = MAP_IMG.right - MAP_IMG.left;
+  const h = MAP_IMG.bottom - MAP_IMG.top;
+  const nx = (x - MAP_WORLD.xMin) / (MAP_WORLD.xMax - MAP_WORLD.xMin);
+  const ny = (y - MAP_WORLD.yMin) / (MAP_WORLD.yMax - MAP_WORLD.yMin);
+  return { x: MAP_IMG.left + nx * w, y: MAP_IMG.bottom - ny * h };
+}
+
+/** Amarillo (poco) → naranja → rojo (mucho). */
+function heatColor(t, alpha) {
+  const stops = [[255, 224, 102], [255, 176, 32], [255, 59, 48]];
+  const v = Math.max(0, Math.min(1, t)) * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(v));
+  const f = v - i;
+  const rgb = stops[i].map((c, k) => Math.round(c + (stops[i + 1][k] - c) * f));
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+}
+
+function renderMap() {
+  const canvas = $('mapHeat');
+  const img = $('mapImg');
+  if (!canvas || !img) return;
+  if (!img.complete || !img.naturalWidth) {
+    img.addEventListener('load', () => renderMap(), { once: true });
+    return;
+  }
+
+  const scale = (img.clientWidth || MAP_IMG.w) / MAP_IMG.w;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(MAP_IMG.w * scale * dpr);
+  canvas.height = Math.round(MAP_IMG.h * scale * dpr);
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  ctx.clearRect(0, 0, MAP_IMG.w, MAP_IMG.h);
+
+  const onlyTreasures = $('mapOnlyTreasures').checked;
+  const chests = state.report?.chests ?? [];
+  const cells = new Map();
+  let placed = 0;
+  let total = 0;
+
+  for (const chest of chests) {
+    if (onlyTreasures && !/tesoro|dorado/i.test(chest.containerClass || '')) continue;
+    total++;
+    const x = Number(chest.x);
+    const y = Number(chest.y);
+    if (!x || !y) continue;
+    placed++;
+    const key = `${Math.floor(x / MAP_CELL)}:${Math.floor(y / MAP_CELL)}`;
+    cells.set(key, (cells.get(key) ?? 0) + 1);
+  }
+
+  // Escala logarítmica: casi todas las celdas tienen pocos cofres y unas pocas muchos, así que
+  // sin comprimir la escala el mapa saldría amarillo entero.
+  const counts = [...cells.values()].sort((a, b) => a - b);
+  const max = Math.max(2, counts.length ? counts[Math.floor(counts.length * 0.95)] : 2);
+  const weight = (n) => Math.log1p(n) / Math.log1p(max);
+
+  for (const [key, n] of cells) {
+    const [cx, cy] = key.split(':').map(Number);
+    const a = mapPoint(cx * MAP_CELL, cy * MAP_CELL);
+    const b = mapPoint((cx + 1) * MAP_CELL, (cy + 1) * MAP_CELL);
+    const x = Math.min(a.x, b.x) + 1;
+    const y = Math.min(a.y, b.y) + 1;
+    const w = Math.abs(b.x - a.x) - 2;
+    const h = Math.abs(b.y - a.y) - 2;
+    if (w <= 0 || h <= 0) continue;
+
+    // Las celdas con uno o dos cofres (posiciones aproximadas en la costa) se aclaran para que
+    // no tapen el mapa como si fueran zonas cargadas.
+    const t = weight(n);
+    ctx.fillStyle = heatColor(t, 0.24 + 0.5 * t);
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 3);
+    ctx.fill();
+  }
+
+  // Los tesoros con posición se marcan encima, para que se vean aunque el calor sea de cofres.
+  for (const chest of chests) {
+    if (!/tesoro|dorado/i.test(chest.containerClass || '')) continue;
+    const x = Number(chest.x);
+    const y = Number(chest.y);
+    if (!x || !y) continue;
+    const p = mapPoint(x, y);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 4.4, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff7cc';
+    ctx.fill();
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = '#0a0a0b';
+    ctx.stroke();
+  }
+
+  const missing = onlyTreasures ? total - placed : 0;
+  $('mapNote').textContent = onlyTreasures
+    ? `${placed} de ${total} tesoros traen posición; los otros ${missing} llegan por la habilidad sin coordenadas, así que no se pueden situar. Las zonas se cuentan con las mismas celdas de 50 m del informe.`
+    : `${placed.toLocaleString('es-ES')} aperturas situadas en celdas de 50 m. Más rojo = más cofres; los puntos blancos son tesoros con posición conocida.`;
+}
+
+window.addEventListener('resize', () => renderMap());
+
 /* ---------------- zonas ---------------- */
 
 function renderZones() {
@@ -376,6 +486,7 @@ function renderAll() {
   renderCosmetics();
   renderMatches();
   renderZones();
+  renderMap();
   renderConfig();
 }
 
@@ -391,6 +502,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
 });
 
 $('onlyTokens').addEventListener('change', renderChests);
+$('mapOnlyTreasures').addEventListener('change', renderMap);
 
 function openScanModal() {
   const total = state.replayCount ?? 0;

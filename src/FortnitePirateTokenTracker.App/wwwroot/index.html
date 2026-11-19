@@ -153,6 +153,25 @@
   <section class="view" id="view-zonas">
     <h1 class="hero-title">Zonas</h1>
     <p class="hero-sub">Agrupación de los cofres por celdas de 50 m para ver dónde aparece el Token.</p>
+
+    <div class="card map-card">
+      <div class="card-head">
+        <h2>Mapa de calor</h2>
+        <label class="switch">
+          <input type="checkbox" id="mapOnlyTreasures">
+          <span>Solo tesoros</span>
+        </label>
+      </div>
+      <div class="map-stage">
+        <img src="img/map.webp" alt="Mapa del juego" id="mapImg" width="560" height="555">
+        <canvas id="mapHeat"></canvas>
+      </div>
+      <div class="map-foot">
+        <div class="map-scale"><span>menos</span><i></i><span>más</span></div>
+        <p class="muted small" id="mapNote"></p>
+      </div>
+    </div>
+
     <div class="zones" id="zonesList"></div>
     <p class="empty" id="zonesEmpty" hidden>Sin coordenadas registradas todavía.</p>
   </section>
