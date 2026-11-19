@@ -1157,3 +1157,38 @@ input[type="checkbox"]:focus-visible { outline: 2px solid rgba(255, 212, 0, 0.6)
   .tabs { padding: 8px 16px; }
   .status-text { display: none; }
 }
+
+/* --- Grosor de la tipografía del juego -------------------------------------------
+   Anton solo trae un peso y la familia declara el rango completo, así que pedir
+   `font-weight: 900` no la engorda. Un trazo mínimo del mismo color le da el aire
+   "black" de Burbank sin cambiar de fuente. */
+.brand-name,
+.hero-title,
+.stat-value,
+.counter-value,
+.prize-name,
+.card h2 {
+  -webkit-text-stroke-width: 0.6px;
+}
+
+.hero-title { -webkit-text-stroke-width: 0.9px; }
+.brand-name { -webkit-text-stroke-width: 0.5px; }
+
+.tab,
+.btn,
+.pill,
+.stat-label,
+.stat-sub,
+.zone-name,
+.seg button,
+.chest-picker summary,
+.counter-label,
+.prize-hit {
+  -webkit-text-stroke-width: 0.35px;
+}
+
+/* Los títulos con degradado tienen el relleno transparente: el trazo necesita color propio. */
+.brand-name,
+.hero-title { -webkit-text-stroke-color: #ffffff; }
+
+.stat.is-gold .stat-value { -webkit-text-stroke-color: #ffd95a; }
