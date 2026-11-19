@@ -102,7 +102,7 @@ code, .mono {
 
 .brand-name {
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 400;
   letter-spacing: 0.06em;
   background: linear-gradient(180deg, #ffffff, #cfcfd8);
@@ -179,7 +179,7 @@ code, .mono {
   background: none;
   color: var(--muted);
   font: inherit;
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 700;
   padding: 8px 12px;
   border-radius: 9px;
@@ -237,7 +237,7 @@ main {
 
 h2 {
   margin: 0;
-  font-size: 13px;
+  font-size: 20px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -273,12 +273,17 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 }
 
 .pill {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
   padding: 4px 10px;
   border-radius: 999px;
   background: #202027;
   color: #cfcfd8;
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -321,7 +326,7 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -583,7 +588,9 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 /* Laterales: solo cuando sobra ancho, para no tapar el panel en pantallas normales. */
 .ad-rail {
   position: fixed;
-  top: 96px;
+  /* Debajo de la barra superior (~61 px) y de la fila de pestañas (~55 px):
+     antes empezaban a 96 px y se montaban sobre las pestañas. */
+  top: 140px;
   width: 160px;
   min-height: 600px;
   display: none;
@@ -595,7 +602,8 @@ h3 { margin: 0 0 6px; font-size: 15px; }
   font-size: 10px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  z-index: 1;
+  /* Sin capa propia: nunca debe quedar por delante de la cabecera ni del nav. */
+  z-index: 0;
 }
 
 .ad-rail-left { left: max(16px, calc(50% - 760px)); }
@@ -1091,7 +1099,7 @@ input[type="checkbox"]:focus-visible { outline: 2px solid rgba(255, 212, 0, 0.6)
   animation: fade 0.15s ease-out;
 }
 
-.modal-card h2 { font-size: 15px; letter-spacing: 0.04em; }
+.modal-card h2 { font-size: 20px; letter-spacing: 0.04em; }
 
 .choice-grid {
   display: grid;
@@ -1154,6 +1162,9 @@ input[type="checkbox"]:focus-visible { outline: 2px solid rgba(255, 212, 0, 0.6)
   main { padding: 20px 16px 48px; }
   .tabs { padding: 8px 16px; }
   .status-text { display: none; }
+  /* El nombre completo es más largo: en pantallas estrechas se reduce para que
+     quepa en una línea junto al botón de analizar. */
+  .brand-name { font-size: clamp(12px, 3.6vw, 18px); letter-spacing: 0.04em; }
 }
 
 /* --- Grosor de la tipografía del juego -------------------------------------------
