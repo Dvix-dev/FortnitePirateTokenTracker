@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Token Tracker · Panel</title>
+<title>Tesoro Tracker · Panel</title>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 <header class="topbar">
   <div class="brand">
     <span class="brand-mark"><img src="/img/token.webp" alt="Token pirata"></span>
-    <span class="brand-name">TOKEN TRACKER</span>
+    <span class="brand-name">TESORO TRACKER</span>
   </div>
   <div class="topbar-actions">
     <span class="status-dot" id="statusDot"></span>
@@ -21,7 +21,7 @@
 
 <nav class="tabs" id="tabs">
   <button class="tab is-active" data-view="resumen">Resumen</button>
-  <button class="tab" data-view="cofres">Cofres y Tokens</button>
+  <button class="tab" data-view="cofres">Cofres</button>
   <button class="tab" data-view="premios">Premios</button>
   <button class="tab" data-view="cosmeticos">Cosméticos</button>
   <button class="tab" data-view="partidas">Partidas</button>
@@ -33,8 +33,8 @@
 <main>
   <!-- RESUMEN -->
   <section class="view is-active" id="view-resumen">
-    <h1 class="hero-title">Tu caza del Token pirata</h1>
-    <p class="hero-sub">Cofres abiertos, Tokens propios y ajenos, y tasa de aparición por partida, calculado solo con tus repeticiones locales.</p>
+    <h1 class="hero-title">Tu caza del tesoro pirata</h1>
+    <p class="hero-sub">Tesoros que han salido en tus repeticiones, cuáles son tuyos y qué premios se han podido identificar. Todo calculado en local.</p>
 
     <div class="grid-stats" id="statsGrid"></div>
 
@@ -55,7 +55,7 @@
 
     <div class="card">
       <div class="card-head">
-        <h2>Ritmo de aparición</h2>
+        <h2>Tesoros frente a cofres</h2>
         <span class="pill pill-gold" id="tokenRatePill">—</span>
       </div>
       <p class="muted" id="rateNote">Analiza tus repeticiones para calcular la tasa real.</p>
@@ -114,7 +114,20 @@
   <!-- PREMIOS -->
   <section class="view" id="view-premios">
     <h1 class="hero-title">Premios y probabilidades</h1>
-    <p class="hero-sub">Probabilidades publicadas por cofre abierto en partida normal. Son referencia del evento, no un cálculo de tus repeticiones.</p>
+    <p class="hero-sub">Ordenados de más a menos probable por cofre abierto. Las tasas son referencia del evento, no un cálculo de tus repeticiones.</p>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Contadores</h2>
+        <span class="muted small" id="countersNote"></span>
+      </div>
+      <div class="counters">
+        <div class="counter is-gold"><span class="counter-label">Skin</span><b class="counter-value" id="counterSkin">0</b></div>
+        <div class="counter is-gold"><span class="counter-label">Token</span><b class="counter-value" id="counterToken">0</b></div>
+        <div class="counter"><span class="counter-label">Coche</span><b class="counter-value" id="counterCar">0</b></div>
+        <div class="counter is-muted"><span class="counter-label">Otros</span><b class="counter-value" id="counterOther">0</b></div>
+      </div>
+    </div>
 
     <div class="card">
       <div class="card-head">
@@ -152,7 +165,7 @@
   <!-- ZONAS -->
   <section class="view" id="view-zonas">
     <h1 class="hero-title">Zonas</h1>
-    <p class="hero-sub">Agrupación de los cofres por celdas de 50 m para ver dónde aparece el Token.</p>
+    <p class="hero-sub">Cofres y tesoros agrupados en celdas de 50 m para ver por dónde salen.</p>
 
     <div class="card map-card">
       <div class="card-head">

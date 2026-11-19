@@ -28,6 +28,11 @@ function esc(value) {
     .replaceAll('"', '&quot;');
 }
 
+/** 1789 → «1.789»: el español omite el separador en los números de cuatro cifras. */
+function num(value) {
+  return Number(value).toLocaleString('de-DE');
+}
+
 function toast(message, isError = false) {
   const el = $('toast');
   el.textContent = message;
@@ -55,38 +60,47 @@ function renderStats() {
   const report = state.report;
   const totals = report?.totals;
 
+  const treasures = (report?.chests ?? []).filter((c) => /tesoro|dorado/i.test(c.containerClass || ''));
+  const matchesWithTreasure = new Set(treasures.map((c) => c.replayFile)).size;
+  const myTreasures = treasures.filter((c) => c.isLocalPlayer).length;
+  const named = treasures.filter((c) => {
+    const raw = c.itemId || '';
+    return raw && !/sin identificar|cosmetics\.variant|immutable/i.test(raw);
+  }).length;
+  const analyzed = totals?.replaysAnalyzed ?? 0;
+  const treasureRate = analyzed === 0 ? 0 : Math.round((matchesWithTreasure / analyzed) * 1000) / 10;
+
   const cards = [
-    { label: 'Partidas analizadas', value: totals?.replaysAnalyzed ?? 0, sub: `${state.replayCount} archivos en la carpeta`, gold: false },
-    { label: 'Cofres detectados', value: totals?.chestsDetected ?? 0, sub: `Media ${totals?.averageChestsPerMatch ?? 0} por partida`, gold: false },
-    { label: 'Tokens míos', value: totals?.tokenChestsByMe ?? 0, sub: `${totals?.chestsByMe ?? 0} cofres abiertos por mí`, gold: true },
-    { label: 'Tokens de otros', value: totals?.tokenChestsByOthers ?? 0, sub: 'En mis partidas', gold: false },
-    { label: 'Partidas con Token', value: `${totals?.tokenRate ?? 0}%`, sub: `${totals?.matchesWithToken ?? 0} de ${totals?.replaysAnalyzed ?? 0}`, gold: true }
+    { label: 'Tesoros detectados', value: treasures.length, sub: `${matchesWithTreasure} partidas`, gold: true },
+    { label: 'Tesoros míos', value: myTreasures, sub: 'abiertos por ti', gold: true },
+    { label: 'Premios identificados', value: named, sub: `de ${treasures.length} tesoros`, gold: false },
+    { label: 'Partidas con tesoro', value: `${treasureRate}%`, sub: `${matchesWithTreasure} de ${analyzed}`, gold: false }
   ];
 
   $('statsGrid').innerHTML = cards.map((card) => `
     <div class="stat ${card.gold ? 'is-gold' : ''}">
       <div class="stat-label">${esc(card.label)}</div>
-      <div class="stat-value">${esc(card.value)}</div>
+      <div class="stat-value">${esc(typeof card.value === 'number' ? num(card.value) : card.value)}</div>
       <div class="stat-sub">${esc(card.sub)}</div>
     </div>
   `).join('');
 
-  $('tokenRatePill').textContent = totals ? `${totals.tokenRate ?? 0}% de partidas` : '—';
+  $('tokenRatePill').textContent = totals ? `${treasureRate}% de partidas` : '—';
   $('rateNote').textContent = totals
-    ? `${totals.matchesWithToken} partidas con Token · ${totals.matchesWithMultipleTokens} con más de uno.`
-    : 'Analiza tus repeticiones para calcular la tasa real.';
+    ? `${matchesWithTreasure} partidas con tesoro · ${named} premios identificados · ${treasures.length - named} sin identificar.`
+    : 'Analiza tus repeticiones para ver cuántos tesoros salen.';
 
   const max = Math.max(1, totals?.chestsDetected ?? 1);
   const rows = [
     { label: 'Cofres totales', value: totals?.chestsDetected ?? 0 },
-    { label: 'Cofres míos', value: totals?.chestsByMe ?? 0 },
-    { label: 'Tokens míos', value: totals?.tokenChestsByMe ?? 0 },
-    { label: 'Tokens de otros', value: totals?.tokenChestsByOthers ?? 0 }
+    { label: 'Tesoros', value: treasures.length },
+    { label: 'Tesoros míos', value: myTreasures },
+    { label: 'Cofres míos', value: totals?.chestsByMe ?? 0 }
   ];
 
   $('rateBars').innerHTML = rows.map((row) => `
     <div class="bar-row">
-      <div class="bar-head"><span>${esc(row.label)}</span><span>${esc(row.value)}</span></div>
+      <div class="bar-head"><span>${esc(row.label)}</span><span>${esc(num(row.value))}</span></div>
       <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, (row.value / max) * 100)}%"></div></div>
     </div>
   `).join('');
@@ -182,24 +196,36 @@ function renderPrizes() {
     const who = c.isLocalPlayer ? 'tú' : (c.playerName || 'sin identificar');
     // Los análisis antiguos pudieron guardar basura del parser anterior como identificador.
     const raw = c.itemId || '';
-    const label = raw && !/cosmetics\.variant|immutable|sin identificar/i.test(raw) ? raw : 'Tesoro del evento';
+    const label = raw && !/cosmetics\.variant|immutable|sin identificar/i.test(raw) ? raw : 'premio sin identificar';
     const source = /dorado/i.test(c.containerClass || '') ? 'cofre dorado' : 'habilidad del evento';
     return `<li><strong>${esc(matchLabel(c.replayFile))}</strong> · ${esc(when)} de partida · ${esc(label)} · ${esc(who)} · ${esc(source)}</li>`;
   }).join('');
 
   const found = new Map((state.report?.categories ?? []).map((c) => [c.key, c.found]));
-  $('prizeList').innerHTML = state.catalog.map((prize) => `
+  $('counterSkin').textContent = found.get('outfit') ?? 0;
+  $('counterToken').textContent = found.get('token') ?? 0;
+  $('counterCar').textContent = found.get('vehicle') ?? 0;
+  $('counterOther').textContent = unknown;
+  $('countersNote').textContent = `${treasures.length} tesoros en total · «otros» son los que no se han podido identificar`;
+
+  // De más a menos probable: «1 en 127» antes que «1 en 1.562.500».
+  const odds = (text) => {
+    const match = /1\s*en\s*([\d.,]+)/i.exec(text || '');
+    return match ? 1 / Number(match[1].replace(/[.,]/g, '')) : 0;
+  };
+  const catalog = [...state.catalog].sort((a, b) => odds(b.odds) - odds(a.odds));
+
+  $('prizeList').innerHTML = catalog.map((prize) => `
     <div class="prize">
       <div class="prize-thumb" style="background:linear-gradient(140deg, ${esc(prize.accent)}33, ${esc(prize.accent)}0d)">
         <img src="/img/${esc(prize.image)}" alt="${esc(prize.label)}" loading="lazy">
       </div>
       <div class="prize-body">
-        <div class="prize-name">${esc(prize.label)}</div>
+        <div class="prize-name">${esc(prize.label)}${(found.get(prize.key) ?? 0) > 0 ? '<span class="prize-hit">visto</span>' : ''}</div>
         <div class="prize-desc">${esc(prize.description)}</div>
       </div>
       <div class="prize-right">
         <div class="prize-odds">${esc(prize.odds)}</div>
-        <div class="prize-found">${found.get(prize.key) ?? 0} encontrados</div>
       </div>
     </div>
   `).join('');
@@ -480,7 +506,7 @@ function renderMyChests() {
 
   $('myChestsSum').textContent = total.toLocaleString('es-ES');
   $('myChestsNote').textContent =
-    `${opened} míos abiertos · ${broken} rotos por mí · ${mates} de mi squad · ${otros} de otros jugadores.`;
+    `${num(opened)} míos abiertos · ${num(broken)} rotos por mí · ${num(mates)} de mi squad · ${num(otros)} de otros jugadores.`;
 }
 
 ['countMineOpened', 'countMineDestroyed', 'countSquad', 'countOthers'].forEach((id) => {
