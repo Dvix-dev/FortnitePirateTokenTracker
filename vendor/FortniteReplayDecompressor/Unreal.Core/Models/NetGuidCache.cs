@@ -70,6 +70,12 @@ public class NetGuidCache
     // toda la tabla de grupos por cada actor, que con miles de actores era cuadrático.
     private readonly Dictionary<string, NetFieldExportGroup> _groupsByClassName = new(StringComparer.Ordinal);
 
+    // Candidatos de la búsqueda de respaldo, ordenados de más específico a menos. Se rehace
+    // cuando aparece un grupo nuevo: así el recorrido es determinista y no depende del orden
+    // interno del diccionario.
+    private List<(string Fixed, string Path)>? _fallbackCandidates;
+    private int _fallbackCandidatesCount = -1;
+
     private int _failedScanBudget = 400_000;
     private NetFieldExportGroup? _networkGameplayTagNodeIndex { get; set; }
 
@@ -215,40 +221,42 @@ public class NetGuidCache
 
             _failedScanBudget--;
 
-            foreach (var groupPathKvp in NetFieldExportGroupMap)
+            // Se elige el grupo MÁS ESPECÍFICO (ruta más larga) y, en empate, el primero por
+            // orden alfabético. Antes se devolvía el primero que apareciese en el diccionario y el
+            // orden de un Dictionary<string,…> cambia entre ejecuciones (hash aleatorio por
+            // proceso): la misma repetición podía dar 169 o 303 cofres según el arranque.
+            NetFieldExportGroup? best = null;
+            var candidates = FallbackCandidates();
+
+            for (var i = 0; i < candidates.Count; i++)
             {
-                var groupPath = groupPathKvp.Key;
-
-                if (!_cleanedPaths.TryGetValue(groupPathKvp.Value.PathNameIndex, out var groupPathFixed))
+                var (candidate, groupPath) = candidates[i];
+                if (path.Contains(candidate, StringComparison.Ordinal))
                 {
-                    groupPathFixed = groupPath.RemoveAllPathPrefixes();
-                    _cleanedPaths[groupPathKvp.Value.PathNameIndex] = groupPathFixed;
-                }
-
-                if (path.Contains(groupPathFixed, StringComparison.Ordinal))
-                {
-                    NetFieldExportGroupMapPathFixed[netguid.Value] = NetFieldExportGroupMap[groupPath];
-                    _archTypeToExportGroup[netguid.Value] = NetFieldExportGroupMap[groupPath];
-
-                    return NetFieldExportGroupMap[groupPath];
+                    best = NetFieldExportGroupMap[groupPath];
+                    break;
                 }
             }
 
-            var cleanedPath = path.CleanPathSuffix();
-            foreach (var groupPathKvp in NetFieldExportGroupMap)
+            if (best is null)
             {
-                var groupPath = groupPathKvp.Key;
-
-                if (_cleanedPaths.TryGetValue(groupPathKvp.Value.PathNameIndex, out var groupPathFixed))
+                var cleanedPath = path.CleanPathSuffix();
+                for (var i = 0; i < candidates.Count; i++)
                 {
-                    if (groupPathFixed.Contains(cleanedPath, StringComparison.Ordinal))
+                    var (candidate, groupPath) = candidates[i];
+                    if (candidate.Contains(cleanedPath, StringComparison.Ordinal))
                     {
-                        NetFieldExportGroupMapPathFixed[netguid.Value] = NetFieldExportGroupMap[groupPath];
-                        _archTypeToExportGroup[netguid.Value] = NetFieldExportGroupMap[groupPath];
-
-                        return NetFieldExportGroupMap[groupPath];
+                        best = NetFieldExportGroupMap[groupPath];
+                        break;
                     }
                 }
+            }
+
+            if (best is not null)
+            {
+                NetFieldExportGroupMapPathFixed[netguid.Value] = best;
+                _archTypeToExportGroup[netguid.Value] = best;
+                return best;
             }
 
             // ChestCounter patch: level placed actors whose instance name is not their class name, e.g.
@@ -284,6 +292,43 @@ public class NetGuidCache
         }
 
         return group;
+    }
+
+    /// <summary>
+    /// Grupos ordenados de ruta más larga a más corta (y por orden alfabético en empate), para
+    /// que la búsqueda de respaldo elija siempre el mismo y no dependa del orden del diccionario.
+    /// </summary>
+    private List<(string Fixed, string Path)> FallbackCandidates()
+    {
+        if (_fallbackCandidates is not null && _fallbackCandidatesCount == NetFieldExportGroupMap.Count)
+        {
+            return _fallbackCandidates;
+        }
+
+        var candidates = new List<(string Fixed, string Path)>(NetFieldExportGroupMap.Count);
+
+        foreach (var groupPathKvp in NetFieldExportGroupMap)
+        {
+            var groupPath = groupPathKvp.Key;
+
+            if (!_cleanedPaths.TryGetValue(groupPathKvp.Value.PathNameIndex, out var groupPathFixed))
+            {
+                groupPathFixed = groupPath.RemoveAllPathPrefixes();
+                _cleanedPaths[groupPathKvp.Value.PathNameIndex] = groupPathFixed;
+            }
+
+            candidates.Add((groupPathFixed, groupPath));
+        }
+
+        candidates.Sort((a, b) =>
+        {
+            var byLength = b.Fixed.Length.CompareTo(a.Fixed.Length);
+            return byLength != 0 ? byLength : string.CompareOrdinal(a.Path, b.Path);
+        });
+
+        _fallbackCandidates = candidates;
+        _fallbackCandidatesCount = NetFieldExportGroupMap.Count;
+        return candidates;
     }
 
     /// <summary>

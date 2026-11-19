@@ -237,6 +237,13 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
                 }
             };
         }
+        else
+        {
+            // El probe es del hilo: si una lectura anterior (la pasada profunda) lo dejó puesto,
+            // esta lectura dejaría de decodificar sus grupos y perdería cofres.
+            RawProbe.Filter = null;
+            RawProbe.Sink = null;
+        }
 
         PromoteGroup(
             "/Game/Building/ActorBlueprints/Containers/Tiered_Chest_Athena.Tiered_Chest_Athena_C",

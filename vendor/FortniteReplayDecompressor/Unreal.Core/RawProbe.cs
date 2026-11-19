@@ -1,17 +1,33 @@
-namespace Unreal.Core;
+﻿namespace Unreal.Core;
 
 /// <summary>
 /// ChestCounter patch: diagnostic probe. When <see cref="Sink"/> is set, the raw bits of every property / RPC / FastArray
 /// that the parser does NOT decode are handed to it, for groups whose path matches <see cref="Filter"/>.
 /// Used to discover where a piece of information lives in the replay. Null (disabled) by default.
+/// The filter and the sink are per thread: several replays can be parsed at the same time, each one
+/// with its own probe.
 /// </summary>
 public static class RawProbe
 {
     public delegate void SinkHandler(uint channelIndex, string group, string field, byte[] data, int bits);
 
-    public static Func<string, bool>? Filter { get; set; }
+    [ThreadStatic]
+    private static Func<string, bool>? _filter;
 
-    public static SinkHandler? Sink { get; set; }
+    [ThreadStatic]
+    private static SinkHandler? _sink;
 
-    internal static bool Matches(string path) => Sink != null && Filter?.Invoke(path) == true;
+    public static Func<string, bool>? Filter
+    {
+        get => _filter;
+        set => _filter = value;
+    }
+
+    public static SinkHandler? Sink
+    {
+        get => _sink;
+        set => _sink = value;
+    }
+
+    internal static bool Matches(string path) => _sink != null && _filter?.Invoke(path) == true;
 }

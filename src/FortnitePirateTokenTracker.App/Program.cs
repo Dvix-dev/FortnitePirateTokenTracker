@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using FortnitePirateTokenTracker.App.Parsing;
 using FortnitePirateTokenTracker.App.Reporting;
@@ -40,6 +41,7 @@ if (command is "help" or "-h" or "--help")
         --path <carpeta>              Carpeta de .replay a analizar
         --limit <n>                   Procesa solo las n repeticiones más recientes
         --force                       Ignora la caché
+        --jobs <n>                    Repeticiones analizadas a la vez (por defecto, núcleos - 2)
       TokenTracker probe <archivo>    Volcado de depuración de una repetición
       TokenTracker discover           Inventaría grupos, campos y pickups de varias repeticiones
         --limit <n>                   Cuántas repeticiones inventariar (por defecto 10)
@@ -241,20 +243,42 @@ if (command == "analyze")
     var limitText = Flag("--limit");
     int? limit = int.TryParse(limitText, out var parsedLimit) ? parsedLimit : null;
 
-    Console.WriteLine($"Carpeta: {config.ReplayFolder}");
+    var jobsText = Flag("--jobs");
+    if (int.TryParse(jobsText, out var parsedJobs))
+    {
+        Environment.SetEnvironmentVariable("TT_JOBS", parsedJobs.ToString(CultureInfo.InvariantCulture));
+    }
+
+    // Un proceso hijo solo analiza su parte y devuelve las líneas de progreso.
+    var child = Environment.GetEnvironmentVariable("TT_CHILD") == "1";
+
     if (!Directory.Exists(config.ReplayFolder))
     {
-        Console.WriteLine("La carpeta no existe. Indica otra con --path.");
+        if (!child)
+        {
+            Console.WriteLine($"La carpeta no existe: {config.ReplayFolder}. Indica otra con --path.");
+        }
+
         return 2;
     }
 
-    Console.WriteLine("Analizando repeticiones...");
+    if (!child)
+    {
+        Console.WriteLine($"Carpeta: {config.ReplayFolder}");
+        Console.WriteLine("Analizando repeticiones...");
+    }
+
     var report = ScanRunner.Run(config, dataDir, limit, Has("--force"), Console.WriteLine);
-    Console.WriteLine();
-    Console.WriteLine(ScanRunner.SummaryText(report));
-    Console.WriteLine();
-    Console.WriteLine($"Informe : {ScanRunner.ReportPath(dataDir)}");
-    Console.WriteLine($"CSV     : {ScanRunner.CsvPath(dataDir)}");
+
+    if (!child)
+    {
+        Console.WriteLine();
+        Console.WriteLine(ScanRunner.SummaryText(report));
+        Console.WriteLine();
+        Console.WriteLine($"Informe : {ScanRunner.ReportPath(dataDir)}");
+        Console.WriteLine($"CSV     : {ScanRunner.CsvPath(dataDir)}");
+    }
+
     return 0;
 }
 
@@ -361,7 +385,14 @@ var scanner = new SemaphoreSlim(1, 1);
             }
 
             var logs = new List<string>();
-            var result = ScanRunner.Run(config, dataDir, limit, false, logs.Add);
+            var logsGate = new object();
+            var result = ScanRunner.Run(config, dataDir, limit, false, text =>
+            {
+                lock (logsGate)
+                {
+                    logs.Add(text);
+                }
+            });
             return PanelServer.Json(new { ok = true, report = result, log = logs });
         }
         catch (Exception ex)

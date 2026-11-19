@@ -16,7 +16,7 @@ public sealed class ReplayAnalyzer
     private const string CacheFileName = "parsed-replays.json";
 
     /// <summary>Subir esto invalida la caché cuando cambian las reglas de detección.</summary>
-    private const string CurrentParserVersion = "22";
+    private const string CurrentParserVersion = "23";
 
     private readonly AppConfig _config;
     private readonly string _dataDir;
@@ -27,11 +27,183 @@ public sealed class ReplayAnalyzer
     {
         _config = config;
         _dataDir = dataDir;
-        _cachePath = Path.Combine(dataDir, "cache", CacheFileName);
+        // Un proceso hijo escribe su propia caché parcial (TT_CACHE) para no pisar la buena.
+        var cacheOverride = Environment.GetEnvironmentVariable("TT_CACHE");
+        _cachePath = string.IsNullOrWhiteSpace(cacheOverride)
+            ? Path.Combine(dataDir, "cache", CacheFileName)
+            : cacheOverride;
         _cache = LoadCache();
     }
 
     public Action<string>? Log { get; set; }
+
+    private readonly object _cacheLock = new();
+    private readonly object _logLock = new();
+
+    private void LogLine(string text)
+    {
+        lock (_logLock)
+        {
+            Log?.Invoke(text);
+        }
+    }
+
+    /// <summary>
+    /// Cuántas repeticiones se analizan a la vez. Cada lectura usa unos 250 MB, así que se
+    /// limita aunque la máquina tenga muchos núcleos. TT_JOBS lo fija a mano.
+    /// </summary>
+    /// <summary>
+    /// Reparte las repeticiones entre varios procesos. Dos lectores en el mismo proceso
+    /// comparten estado de la librería y el recuento de cofres deja de cuadrar, así que cada
+    /// proceso analiza su parte por separado y aquí se juntan los resultados.
+    /// </summary>
+    private void RunInChildProcesses(string exe, List<string> files, bool force)
+    {
+        var jobs = Math.Min(JobCount(files.Count), files.Count);
+        var cacheDir = Path.GetDirectoryName(_cachePath)!;
+        var shards = new List<string>();
+        var children = new List<System.Diagnostics.Process>();
+
+        try
+        {
+            for (var i = 0; i < jobs; i++)
+            {
+                var chunk = new List<string>();
+                for (var index = i; index < files.Count; index += jobs)
+                {
+                    chunk.Add(Path.GetFileName(files[index]));
+                }
+
+                if (chunk.Count == 0)
+                {
+                    continue;
+                }
+
+                var shard = Path.Combine(cacheDir, $"shard-{Guid.NewGuid():N}.json");
+                shards.Add(shard);
+
+                var start = new System.Diagnostics.ProcessStartInfo(exe)
+                {
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                start.ArgumentList.Add("analyze");
+                start.ArgumentList.Add("--path");
+                start.ArgumentList.Add(_config.ReplayFolder);
+                if (force)
+                {
+                    start.ArgumentList.Add("--force");
+                }
+
+                start.Environment["TT_JOBS"] = "1";
+                start.Environment["TT_CHILD"] = "1";
+                start.Environment["TT_ONLY_FILES"] = string.Join(",", chunk);
+                start.Environment["TT_CACHE"] = shard;
+
+                var child = System.Diagnostics.Process.Start(start)!;
+                child.OutputDataReceived += (_, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        LogLine(e.Data);
+                    }
+                };
+                child.ErrorDataReceived += (_, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        LogLine(e.Data);
+                    }
+                };
+                child.BeginOutputReadLine();
+                child.BeginErrorReadLine();
+                children.Add(child);
+            }
+
+            foreach (var child in children)
+            {
+                child.WaitForExit();
+            }
+        }
+        finally
+        {
+            foreach (var child in children)
+            {
+                child.Dispose();
+            }
+
+            MergeShards(shards);
+        }
+    }
+
+    /// <summary>Junta lo analizado por cada proceso hijo en la caché buena.</summary>
+    private void MergeShards(List<string> shards)
+    {
+        foreach (var shard in shards)
+        {
+            try
+            {
+                if (!File.Exists(shard))
+                {
+                    continue;
+                }
+
+                var child = JsonSerializer.Deserialize<CacheFile>(
+                    File.ReadAllText(shard), AppConfig.SerializerOptions);
+                if (child is null)
+                {
+                    continue;
+                }
+
+                lock (_cacheLock)
+                {
+                    foreach (var (key, entry) in child.Entries)
+                    {
+                        if (entry.Match is not null)
+                        {
+                            _cache.Entries[key] = entry;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogLine($"  ! no se pudo juntar un proceso hijo: {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                try
+                {
+                    File.Delete(shard);
+                }
+                catch
+                {
+                    // Un fichero temporal que no se puede borrar no rompe nada.
+                }
+            }
+        }
+    }
+
+    private static int JobCount(int files)
+    {
+        if (files <= 1)
+        {
+            return 1;
+        }
+
+        // Desactivado por defecto: el análisis en procesos separados da un recuento de cofres
+        // distinto al de la pasada en serie (cada repetición depende de lo analizado antes en
+        // el proceso), y las cifras tienen que cuadrar. Se activa a mano para medir.
+        if (int.TryParse(Environment.GetEnvironmentVariable("TT_JOBS"), out var jobs))
+        {
+            return Math.Clamp(jobs, 1, 16);
+        }
+
+        return 1;
+    }
 
     /// <summary>
     /// Modo de parseo. Debug lee todos los grupos (también los que no usamos) y multiplica el
@@ -49,9 +221,21 @@ public sealed class ReplayAnalyzer
             return new List<string>();
         }
 
-        return Directory.EnumerateFiles(_config.ReplayFolder, "*.replay", SearchOption.TopDirectoryOnly)
+        var files = Directory.EnumerateFiles(_config.ReplayFolder, "*.replay", SearchOption.TopDirectoryOnly)
             .OrderByDescending(File.GetLastWriteTimeUtc)
             .ToList();
+
+        // Un proceso hijo recibe solo su parte de repeticiones.
+        var only = Environment.GetEnvironmentVariable("TT_ONLY_FILES");
+        if (!string.IsNullOrWhiteSpace(only))
+        {
+            var names = new HashSet<string>(
+                only.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                StringComparer.OrdinalIgnoreCase);
+            files = files.Where(f => names.Contains(Path.GetFileName(f))).ToList();
+        }
+
+        return files;
     }
 
     /// <summary>
@@ -69,22 +253,30 @@ public sealed class ReplayAnalyzer
         var onDisk = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var fromCache = 0;
         var errors = 0;
+        var jobs = JobCount(files.Count);
 
-        foreach (var file in files)
+        void Process(string file)
         {
             var info = new FileInfo(file);
             var key = Path.GetFileName(file);
-            onDisk.Add(key);
+            lock (_cacheLock)
+            {
+                onDisk.Add(key);
+            }
 
             // Una repetición que acaba de cambiar se está grabando: se deja para el próximo
             // análisis en vez de guardar un resultado vacío.
             if (!force && (DateTime.UtcNow - info.LastWriteTimeUtc).TotalSeconds < 90)
             {
-                Log?.Invoke($"... {key} (grabándose)");
-                continue;
+                LogLine($"... {key} (grabándose)");
+                return;
             }
 
-            _cache.Entries.TryGetValue(key, out var previous);
+            CacheEntry? previous;
+            lock (_cacheLock)
+            {
+                _cache.Entries.TryGetValue(key, out previous);
+            }
 
             if (!force && previous is not null
                 && !string.IsNullOrEmpty(previous.ParserVersion)
@@ -93,29 +285,29 @@ public sealed class ReplayAnalyzer
                 && previous.LastWriteTicks == info.LastWriteTimeUtc.Ticks
                 && previous.Match is not null)
             {
-                fromCache++;
-                Log?.Invoke($"= {key} (memoria)");
-                continue;
+                Interlocked.Increment(ref fromCache);
+                LogLine($"= {key} (memoria)");
+                return;
             }
 
-            Log?.Invoke($"> {key}");
+            LogLine($"> {key}");
             var parsed = AnalyzeFile(file);
 
             if (parsed.Error is not null)
             {
-                errors++;
+                Interlocked.Increment(ref errors);
 
                 // Un análisis fallido no debe borrar uno bueno: se conserva el anterior.
                 if (previous?.Match is not null && previous.Match.Error is null)
                 {
                     previous.LastError = parsed.Error;
                     previous.LastAttemptUtc = DateTimeOffset.UtcNow;
-                    Log?.Invoke($"  ! {key}: se conserva lo anterior ({parsed.Error})");
-                    continue;
+                    LogLine($"  ! {key}: se conserva lo anterior ({parsed.Error})");
+                    return;
                 }
             }
 
-            _cache.Entries[key] = new CacheEntry
+            var entry = new CacheEntry
             {
                 Size = info.Length,
                 LastWriteTicks = info.LastWriteTimeUtc.Ticks,
@@ -124,6 +316,38 @@ public sealed class ReplayAnalyzer
                 LastError = parsed.Error,
                 Match = parsed
             };
+
+            lock (_cacheLock)
+            {
+                _cache.Entries[key] = entry;
+            }
+        }
+
+        var exe = Environment.ProcessPath;
+
+        if (jobs <= 1 || files.Count <= 1 || string.IsNullOrEmpty(exe))
+        {
+            foreach (var file in files)
+            {
+                Process(file);
+            }
+        }
+        else
+        {
+            foreach (var file in files)
+            {
+                lock (_cacheLock)
+                {
+                    onDisk.Add(Path.GetFileName(file));
+                }
+            }
+
+            RunInChildProcesses(exe, files, force);
+
+            lock (_cacheLock)
+            {
+                errors = _cache.Entries.Count(e => onDisk.Contains(e.Key) && e.Value.LastError is not null);
+            }
         }
 
         SaveCache();
@@ -194,8 +418,15 @@ public sealed class ReplayAnalyzer
         {
             try
             {
+                // La segunda lectura solo necesita las habilidades concedidas y quién las tiene,
+                // y en modo Normal cuesta la mitad que en Debug con el mismo resultado.
+                // TT_DEEP_MODE=Debug la devuelve al modo completo para depurar.
+                var deepMode = Enum.TryParse<ParseMode>(Environment.GetEnvironmentVariable("TT_DEEP_MODE"), true, out var mode)
+                    ? mode
+                    : ParseMode.Normal;
+
                 var profundo = new CapturingReader(
-                    ParseMode.Debug,
+                    deepMode,
                     abilityProbe: true,
                     prizeScan: Environment.GetEnvironmentVariable("TT_PRIZE_SCAN") == "1");
                 using var stream2 = new FileStream(
@@ -982,6 +1213,8 @@ public sealed class ReplayAnalyzer
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_cachePath)!);
+            // La cabecera se queda al día con la versión con la que se ha escrito la caché.
+            _cache.ParserVersion = CurrentParserVersion;
             File.WriteAllText(_cachePath, JsonSerializer.Serialize(_cache, AppConfig.SerializerOptions));
         }
         catch
