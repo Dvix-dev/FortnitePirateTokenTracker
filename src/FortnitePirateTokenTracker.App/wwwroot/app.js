@@ -292,11 +292,13 @@ function renderMyChests() {
   const mineOpened = $('countMineOpened').checked;
   const mineDestroyed = $('countMineDestroyed').checked;
   const squad = $('countSquad').checked;
+  const others = $('countOthers').checked;
 
   let total = 0;
   let opened = 0;
   let broken = 0;
   let mates = 0;
+  let otros = 0;
 
   for (const chest of chests) {
     if (chest.isLocalPlayer) {
@@ -310,15 +312,18 @@ function renderMyChests() {
     } else if (chest.isSquad) {
       mates++;
       if (squad) total++;
+    } else if (chest.playerName) {
+      otros++;
+      if (others) total++;
     }
   }
 
   $('myChestsSum').textContent = total.toLocaleString('es-ES');
   $('myChestsNote').textContent =
-    `${opened} míos abiertos · ${broken} rotos por mí · ${mates} de mi squad.`;
+    `${opened} míos abiertos · ${broken} rotos por mí · ${mates} de mi squad · ${otros} de otros jugadores.`;
 }
 
-['countMineOpened', 'countMineDestroyed', 'countSquad'].forEach((id) => {
+['countMineOpened', 'countMineDestroyed', 'countSquad', 'countOthers'].forEach((id) => {
   $(id).addEventListener('change', renderMyChests);
 });
 
