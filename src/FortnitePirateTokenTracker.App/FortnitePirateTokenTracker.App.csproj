@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FortnitePirateTokenTracker.Core\FortnitePirateTokenTracker.Core.csproj" />
+    <ProjectReference Include="..\FortnitePirateTokenTracker.Engine\FortnitePirateTokenTracker.Engine.csproj" />
     <ProjectReference Include="..\FortnitePirateTokenTracker.ReplayReader\FortnitePirateTokenTracker.ReplayReader.csproj" />
   </ItemGroup>
 

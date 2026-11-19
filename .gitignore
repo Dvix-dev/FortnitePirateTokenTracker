@@ -22,3 +22,6 @@ data/*.csv
 
 # Capturas de revisión visual
 /screenshot.png
+
+# Salida de la web estática
+dist-web/

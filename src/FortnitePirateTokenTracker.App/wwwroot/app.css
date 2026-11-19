@@ -614,6 +614,121 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 
 /* ---------- zonas ---------- */
 
+/* ---------- aviso de privacidad y publicidad ---------- */
+
+.notice {
+  max-width: 1080px;
+  margin: 14px auto 0;
+  padding: 11px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(61, 220, 151, 0.28);
+  background: rgba(61, 220, 151, 0.07);
+  color: #c9f5e0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.notice strong { color: #6ef0b6; }
+
+.ad-slot {
+  display: grid;
+  place-items: center;
+  min-height: 92px;
+  margin: 0 0 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.015);
+  color: #5c5c68;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* ---------- zona de arrastre ---------- */
+
+.dropzone {
+  display: grid;
+  gap: 6px;
+  place-items: center;
+  padding: 26px 18px;
+  border: 1px dashed var(--gold-edge);
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 0%, rgba(255, 212, 0, 0.09), transparent 70%), #101014;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+
+.dropzone:hover,
+.dropzone.is-over {
+  border-color: var(--gold);
+  background: radial-gradient(circle at 50% 0%, rgba(255, 212, 0, 0.2), transparent 70%), #12120f;
+}
+
+.dropzone strong { font-family: var(--font-display); font-size: 20px; letter-spacing: 0.02em; }
+.dropzone span { color: var(--muted); font-size: 13px; max-width: 46ch; }
+
+/* ---------- pantalla de carga ---------- */
+
+.processing {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(6, 6, 8, 0.82);
+  backdrop-filter: blur(6px);
+}
+
+.processing[hidden] { display: none; }
+
+.processing-card {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  padding: 30px 26px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, #191920, #111114);
+  box-shadow: 0 30px 80px -40px #000;
+  text-align: center;
+}
+
+.processing-card h2 { margin: 0; font-size: 26px; }
+.processing-card .small { margin: 0; }
+
+.processing-step { margin: 0; color: var(--muted); font-size: 13px; min-height: 18px; }
+
+.processing-spinner {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 212, 0, 0.18);
+  border-top-color: var(--gold);
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.processing-bar {
+  width: 100%;
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.processing-bar i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: 99px;
+  background: var(--gold-grad);
+  transition: width .3s ease;
+}
+
 /* ---------- mapa de calor ---------- */
 
 .map-card { padding: 14px; }

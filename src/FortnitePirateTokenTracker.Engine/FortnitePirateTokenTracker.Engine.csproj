@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>FortnitePirateTokenTracker.Engine</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FortnitePirateTokenTracker.Core\FortnitePirateTokenTracker.Core.csproj" />
+    <ProjectReference Include="..\FortnitePirateTokenTracker.ReplayReader\FortnitePirateTokenTracker.ReplayReader.csproj" />
+    <ProjectReference Include="..\..\vendor\FortniteReplayDecompressor\FortniteReplayReader\FortniteReplayReader.csproj" />
+  </ItemGroup>
+
+</Project>

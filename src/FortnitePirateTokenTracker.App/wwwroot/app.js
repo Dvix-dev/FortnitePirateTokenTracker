@@ -1,6 +1,9 @@
 const state = {
+  mode: 'server',
   config: null,
   report: null,
+  matches: [],
+  files: [],
   catalog: [],
   folderExists: false,
   replayCount: 0,
@@ -65,7 +68,7 @@ function renderStats() {
   const myTreasures = treasures.filter((c) => c.isLocalPlayer).length;
   const named = treasures.filter((c) => {
     const raw = c.itemId || '';
-    return raw && !/sin identificar|cosmetics\.variant|immutable/i.test(raw);
+    return raw && !/sin identificar|cosmetics\.variant|immutable|tesoro del evento/i.test(raw);
   }).length;
   const analyzed = totals?.replaysAnalyzed ?? 0;
   const treasureRate = analyzed === 0 ? 0 : Math.round((matchesWithTreasure / analyzed) * 1000) / 10;
@@ -180,7 +183,7 @@ function renderPrizes() {
 
   const unknown = treasures.filter((c) => {
     const raw = c.itemId || '';
-    return !raw || /cosmetics\.variant|immutable|sin identificar/i.test(raw);
+    return !raw || /cosmetics\.variant|immutable|sin identificar|tesoro del evento/i.test(raw);
   }).length;
   $('treasureUnknown').textContent = unknown > 0
     ? `${unknown} llegaron como «tesoro del evento»: la repetición no envía qué premio cayó, solo quién lo recibió y cuándo.`
@@ -196,7 +199,7 @@ function renderPrizes() {
     const who = c.isLocalPlayer ? 'tú' : (c.playerName || 'sin identificar');
     // Los análisis antiguos pudieron guardar basura del parser anterior como identificador.
     const raw = c.itemId || '';
-    const label = raw && !/cosmetics\.variant|immutable|sin identificar/i.test(raw) ? raw : 'premio sin identificar';
+    const label = raw && !/cosmetics\.variant|immutable|sin identificar|tesoro del evento/i.test(raw) ? raw : 'premio sin identificar';
     const source = /dorado/i.test(c.containerClass || '') ? 'cofre dorado' : 'habilidad del evento';
     return `<li><strong>${esc(matchLabel(c.replayFile))}</strong> · ${esc(when)} de partida · ${esc(label)} · ${esc(who)} · ${esc(source)}</li>`;
   }).join('');
@@ -218,7 +221,7 @@ function renderPrizes() {
   $('prizeList').innerHTML = catalog.map((prize) => `
     <div class="prize">
       <div class="prize-thumb" style="background:linear-gradient(140deg, ${esc(prize.accent)}33, ${esc(prize.accent)}0d)">
-        <img src="/img/${esc(prize.image)}" alt="${esc(prize.label)}" loading="lazy">
+        <img src="img/${esc(prize.image)}" alt="${esc(prize.label)}" loading="lazy">
       </div>
       <div class="prize-body">
         <div class="prize-name">${esc(prize.label)}${(found.get(prize.key) ?? 0) > 0 ? '<span class="prize-hit">visto</span>' : ''}</div>
@@ -646,7 +649,13 @@ async function runScan(limit) {
   }
 }
 
-$('scanBtn').addEventListener('click', openScanModal);
+$('scanBtn').addEventListener('click', () => {
+  if (state.mode === 'local') {
+    $('replayInput').click();
+    return;
+  }
+  openScanModal();
+});
 
 $('scanConfirm').addEventListener('click', () => {
   try {
@@ -702,21 +711,151 @@ $('configForm').addEventListener('submit', async (event) => {
 
 async function load() {
   try {
-    const data = await api('/api/state');
+    const data = await TTStore.load();
     Object.assign(state, data);
     state.loadedAt = new Date().toLocaleTimeString('es-ES');
+    applyMode();
     renderAll();
+
+    if (state.mode === 'local' && (state.catalog?.length ?? 0) === 0) {
+      ensureCatalog();
+    }
   } catch (error) {
     toast(`No se pudo cargar el panel: ${error.message}`, true);
   }
 }
 
+/** El catálogo de premios vive en el motor; se pide una vez y se guarda en el navegador. */
+async function ensureCatalog() {
+  try {
+    const catalog = await TTEngine.catalog();
+    state.catalog = catalog;
+    await TTStore.saveCatalog(catalog);
+    renderPrizes();
+  } catch {
+    // Sin motor el catálogo se queda vacío; el resto del panel funciona igual.
+  }
+}
+
+/** Ajusta el panel al modo: exe local (carpeta) o web estática (arrastrar .replay). */
+function applyMode() {
+  const local = state.mode === 'local';
+
+  $('uploadCard').hidden = !local;
+  $('privacyNotice').hidden = false;
+  $('privacyText').textContent = local
+    ? 'Las repeticiones se leen y se guardan solo en tu equipo: no se envían ni se almacenan en ningún servidor.'
+    : 'Estás en el panel local: TokenTracker.exe lee tu carpeta de repeticiones y guarda todo en data/.';
+
+  $('browserDataCard').hidden = !local;
+  $('browserDataCount').textContent = local ? `${state.files?.length ?? 0} archivos analizados` : '';
+  $('configForm').hidden = local;
+  $('outputPathsCard').hidden = local;
+  $('serverGuide').hidden = local;
+  $('guideIntro').textContent = local
+    ? 'De cero a datos en cuatro pasos, sin instalar nada.'
+    : 'Con el programa local: de cero a datos en cuatro pasos.';
+  $('scanBtn').textContent = local ? 'Añadir repeticiones' : 'Analizar ahora';
+  $('uploadCount').textContent = local
+    ? `${state.files?.length ?? 0} analizados hasta ahora`
+    : '';
+
+  const configTab = document.querySelector('button[data-view="configuracion"]');
+  if (configTab) {
+    configTab.textContent = local ? 'Mis datos' : 'Configuración';
+  }
+}
+
+/* ---------------- subida de repeticiones (web estática) ---------------- */
+
+function showProcessing(title, step) {
+  $('processingTitle').textContent = title;
+  $('processingStep').textContent = step ?? '';
+  $('processingBar').style.width = '0%';
+  $('processing').hidden = false;
+}
+
+const paint = () => new Promise((resolve) => setTimeout(resolve, 40));
+
+async function handleReplayFiles(list) {
+  const files = [...(list ?? [])].filter((file) => file.name.toLowerCase().endsWith('.replay'));
+  if (files.length === 0) {
+    toast('Elige archivos .replay', true);
+    return;
+  }
+
+  showProcessing('Analizando repeticiones…', 'Cargando el motor (solo la primera vez)…');
+  await paint();
+
+  try {
+    await TTEngine.runtime();
+    const total = files.length;
+
+    for (let i = 0; i < total; i++) {
+      $('processingStep').textContent = `${i + 1} de ${total} · ${files[i].name}`;
+      $('processingBar').style.width = `${Math.round((i / total) * 92)}%`;
+      await paint();
+      const match = await TTEngine.analyze(files[i]);
+      await TTStore.addMatch(files[i].name, match);
+    }
+
+    $('processingStep').textContent = 'Calculando el informe…';
+    $('processingBar').style.width = '96%';
+    await paint();
+
+    const guardado = await TTStore.load();
+    const report = await TTEngine.buildReport(guardado.matches, guardado.config ?? {});
+    await TTStore.saveReport(report);
+
+    await load();
+    $('processingBar').style.width = '100%';
+    $('processingStep').textContent = 'Listo';
+    setTimeout(() => { $('processing').hidden = true; }, 400);
+    toast(total === 1 ? 'Repetición analizada' : `${total} repeticiones analizadas`);
+  } catch (error) {
+    $('processing').hidden = true;
+    toast(`No se pudo analizar: ${error.message}`, true);
+  }
+}
+
+if ($('dropZone')) {
+  const zone = $('dropZone');
+  zone.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    zone.classList.add('is-over');
+  });
+  zone.addEventListener('dragleave', () => zone.classList.remove('is-over'));
+  zone.addEventListener('drop', (event) => {
+    event.preventDefault();
+    zone.classList.remove('is-over');
+    handleReplayFiles(event.dataTransfer?.files);
+  });
+  $('replayInput').addEventListener('change', (event) => {
+    handleReplayFiles(event.target.files);
+    event.target.value = '';
+  });
+}
+
+if ($('clearDataBtn')) {
+  $('clearDataBtn').addEventListener('click', async () => {
+    if (!window.confirm('¿Borrar de este navegador las repeticiones analizadas y sus resultados?')) {
+      return;
+    }
+
+    await TTStore.clearAll();
+    state.report = null;
+    state.matches = [];
+    state.files = [];
+    await load();
+    toast('Datos borrados');
+  });
+}
+
 load();
 
-// Se refresca solo: al terminar un análisis o al aparecer repes nuevas, la lista de eventos
-// cambia sin recargar la página.
+// La web estática no tiene a quién preguntar: se refresca solo al volver a la pestaña.
 setInterval(() => {
-  if (!document.hidden) {
+  if (!document.hidden && state.mode === 'server') {
     load();
   }
 }, 10000);

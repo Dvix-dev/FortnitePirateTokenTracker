@@ -1,0 +1,18 @@
+<linker>
+  <!-- Los grupos de campos replicados se crean por reflexión a partir de su nombre. -->
+  <assembly fullname="FortniteReplayReader">
+    <type fullname="*" preserve="all" />
+  </assembly>
+  <assembly fullname="Unreal.Core">
+    <type fullname="*" preserve="all" />
+  </assembly>
+  <assembly fullname="FortnitePirateTokenTracker.ReplayReader">
+    <type fullname="*" preserve="all" />
+  </assembly>
+  <assembly fullname="FortnitePirateTokenTracker.Engine">
+    <type fullname="*" preserve="all" />
+  </assembly>
+  <assembly fullname="FortnitePirateTokenTracker.Core">
+    <type fullname="*" preserve="all" />
+  </assembly>
+</linker>

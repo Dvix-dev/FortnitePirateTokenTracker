@@ -1,6 +1,11 @@
 # Fortnite Pirate Token Tracker
 
-Herramienta local para Windows que analiza tus repeticiones de Fortnite (`.replay`) y rastrea la aparición del **Token pirata** y de los **cofres dorados** asociados al evento.
+Analizador de repeticiones de Fortnite (`.replay`) para ver **qué tesoros han salido, qué premios eran y dónde**, en tu equipo o en una web estática donde cada visitante analiza sus propios archivos.
+
+Hay dos formas de usarlo y comparten el mismo motor y el mismo panel:
+
+- **Web estática** (`dist-web/`): se sube a cualquier hosting. El lector de repeticiones va compilado a WebAssembly y se ejecuta **dentro del navegador**; los resultados se guardan en IndexedDB. No hay servidor, no hay subidas y no se recopila nada.
+- **Programa local** (`TokenTracker.exe`): lee tu carpeta de repeticiones, cachea en `data/` y sirve el mismo panel en `http://localhost:5178`.
 
 Lee únicamente los archivos de repetición que el propio juego genera en tu disco. No modifica Fortnite, no inyecta código, no lee memoria del proceso y no se conecta a Epic Games.
 
@@ -112,30 +117,29 @@ Se mantiene la puerta abierta a un **frontend web local ligero** (una página es
 - La carpeta `%LOCALAPPDATA%\FortniteGame\Saved\Demos` con al menos un `.replay` completo.
 - Opcional: `Oodle.dll` de la instalación local de Fortnite si la distribución del descompresor lo requiere.
 
-## 6. Estructura propuesta del repositorio
+## 6. Estructura del repositorio
 
 ```text
 FortnitePirateTokenTracker/
-├─ README.md                          # este documento
-├─ .gitignore                         # excluye replays, caché y salidas
+├─ README.md                       # este documento
+├─ docs/WEB.md                     # publicar la web estática, SEO y publicidad
 ├─ src/
-│  ├─ FortnitePirateTokenTracker.Cli/         # entrada, argumentos, informe de consola
-│  ├─ FortnitePirateTokenTracker.Core/        # dominio: modelos, detección, agregación, zonas
-│  └─ FortnitePirateTokenTracker.Parsing/     # adaptador sobre FortniteReplayReader
-├─ tools/
-│  └─ ReplayProbe/                    # volcado de depuración de un .replay (Paso 2)
-├─ data/
-│  └─ map_pois/
-│     └─ <version_mapa>.json          # catálogo de zonas con centro y radio
-├─ tests/
-│  └─ FortnitePirateTokenTracker.Tests/
+│  ├─ FortnitePirateTokenTracker.Core/    # modelos, catálogo de premios, informe, zonas
+│  ├─ FortnitePirateTokenTracker.ReplayReader/  # grupos replicados del juego
+│  ├─ FortnitePirateTokenTracker.Engine/  # MOTOR: lee una repetición (disco o memoria)
+│  ├─ FortnitePirateTokenTracker.App/     # programa local: lote, caché, servidor y wwwroot
+│  └─ FortnitePirateTokenTracker.Web/     # el mismo motor compilado a WebAssembly
+├─ vendor/FortniteReplayDecompressor/   # lector de repeticiones (MIT, con parches propios)
+├─ tools/build-web.sh              # genera dist-web/ listo para subir
 └─ (generados, fuera de control de versiones)
-   ├─ resultados_token.csv
-   ├─ resumen.json
-   └─ processed_replays.json
+   ├─ dist-web/                    # salida de la web estática
+   └─ data/                        # caché y salidas del modo local
 ```
 
-Separación de responsabilidades: `Parsing` no sabe qué es un Token (solo traduce repetición → eventos neutros); `Core` aplica reglas y agrega; `Cli` presenta y exporta. Esto permite cambiar de parser sin tocar la lógica del evento.
+Separación de responsabilidades: `Engine` no sabe nada del disco ni del servidor (recibe un
+flujo de bytes); `Core` aplica las reglas del evento y construye el informe; `App` añade lote,
+caché y servidor local; `Web` solo expone el motor a JavaScript. El panel (`App/wwwroot`) es
+**uno solo** para los dos modos: no hay dos interfaces que mantener.
 
 ## 7. Flujo de uso previsto
 
@@ -371,12 +375,15 @@ Arquitectura entregada (atribución por posición):
 ```text
 src/
 ├─ FortnitePirateTokenTracker.Core/     # configuración, catálogo, modelos, agregación, CSV
-└─ FortnitePirateTokenTracker.App/      # lector, analizador con caché, servidor local, panel web
-   ├─ Parsing/CapturingReader.cs        # subclase del lector oficial: captura grupos replicados
-   ├─ Parsing/ReplayAnalyzer.cs         # lote + caché por tamaño/mtime
+├─ FortnitePirateTokenTracker.Engine/   # motor: CapturingReader + ReplayParser (disco o memoria)
+├─ FortnitePirateTokenTracker.Web/      # motor a WebAssembly + exports para el panel
+└─ FortnitePirateTokenTracker.App/      # lote, caché, servidor local y panel web
+   ├─ Parsing/ReplayAnalyzer.cs         # lote + caché por tamaño/mtime (usa el motor)
    ├─ Reporting/ScanRunner.cs           # informe + CSV
    ├─ Web/PanelServer.cs                # servidor HTTP mínimo sobre TcpListener
-   └─ wwwroot/                          # panel (HTML/CSS/JS sin dependencias)
+   └─ wwwroot/                          # panel compartido (HTML/CSS/JS sin dependencias)
+      ├─ js/store.js                    # servidor local o IndexedDB
+      └─ js/engine.js                   # carga el motor WebAssembly
 ```
 
 No se parchea ni se redistribuye el parser: `CapturingReader` hereda de `FortniteReplayReader.ReplayReader` y usa el gancho `OnExportRead` para observar cada grupo, delegando el parseo normal en la implementación base.
@@ -435,7 +442,30 @@ Requiere el SDK de .NET 10. Si no está instalado en el sistema, se puede instal
 
 Salidas en `data/`: `report.json`, `resultados_token.csv`, `config.json` y `cache/parsed-replays.json`.
 
-## 22. Estado por sprint
+## 22. Web estática (sin servidor)
+
+El panel detecta solo en qué modo está: si `api/state` responde, usa el exe local; si no,
+funciona como web estática con el motor WebAssembly y IndexedDB.
+
+```bash
+# Genera dist-web/ (motor + panel). Sube su CONTENIDO a tu hosting.
+bash tools/build-web.sh
+```
+
+Detalles que conviene saber:
+
+- **Nada se sube.** El `.replay` se lee en la pestaña, se descifra con AES gestionado (Mono en
+  WebAssembly no trae AES nativo) y el resultado se guarda en IndexedDB. No hay endpoints de
+  escritura ni telemetría.
+- **Tamaño:** unos 24 MB en total; la primera carga descarga el runtime (~5 MB) y luego queda en caché.
+- **Tiempo:** una repetición de 20 MB tarda entre 30 y 90 s según el equipo, por eso hay pantalla
+  de carga. Los archivos se pueden soltar de varios en varios.
+- **Sin `file://`:** WebAssembly necesita un origen HTTP(S); abrir `index.html` con doble clic no vale.
+- **Personalización antes de publicar:** dominio en `index.html` (`canonical`, `og:url`),
+  `robots.txt` y `sitemap.xml`; huecos de publicidad en `index.html` (marcados «Espacio para
+  publicidad»). Todo está explicado en [docs/WEB.md](docs/WEB.md).
+
+## 23. Estado por sprint
 
 | Sprint | Contenido | Estado |
 |--------|-----------|--------|

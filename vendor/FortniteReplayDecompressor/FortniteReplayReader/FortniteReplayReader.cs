@@ -341,9 +341,18 @@ public class ReplayReader : Unreal.Core.ReplayReader<FortniteReplay>
         var key = Replay.Info.EncryptionKey;
         var encryptedBytes = archive.ReadMemory(size);
 
-        using var aes = Aes.Create();
-        aes.Key = key.ToArray();
-        var decryptedArray = aes.DecryptEcb(encryptedBytes.Span, PaddingMode.PKCS7);
+        byte[] decryptedArray;
+        try
+        {
+            using var aes = Aes.Create();
+            aes.Key = key.ToArray();
+            decryptedArray = aes.DecryptEcb(encryptedBytes.Span, PaddingMode.PKCS7);
+        }
+        catch (PlatformNotSupportedException)
+        {
+            // WebAssembly no trae AES nativo: se descifra en código gestionado.
+            decryptedArray = Unreal.Core.Crypto.ManagedAes.DecryptEcbPkcs7(encryptedBytes.Span, key.Span);
+        }
 
         return new Unreal.Core.BinaryReader(decryptedArray.AsMemory())
         {

@@ -8,7 +8,7 @@ using Unreal.Core.Exceptions;
 using Unreal.Core.Models;
 using Unreal.Core.Models.Enums;
 
-namespace FortnitePirateTokenTracker.App.Parsing;
+namespace FortnitePirateTokenTracker.Engine;
 
 /// <summary>Una apertura de contenedor observada durante el parseo.</summary>
 public sealed class ContainerSnapshot

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
+    <OutputType>Exe</OutputType>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <WasmEnableJavaScriptInterop>true</WasmEnableJavaScriptInterop>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- El panel serializa los modelos con reflexión, como hace el exe local. -->
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <AssemblyName>TokenTrackerWeb</AssemblyName>
+    <RootNamespace>FortnitePirateTokenTracker.Web</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FortnitePirateTokenTracker.Core\FortnitePirateTokenTracker.Core.csproj" />
+    <ProjectReference Include="..\FortnitePirateTokenTracker.Engine\FortnitePirateTokenTracker.Engine.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- El lector crea los grupos de campos por reflexión: el descriptor evita que el recorte
+         se lleve esas clases y mantiene el tamaño del motor pequeño. -->
+    <TrimmerRootDescriptor Include="ILLink.Descriptors.xml" />
+  </ItemGroup>
+
+  <!-- El panel web es el mismo que sirve el exe local: una sola copia. -->
+  <ItemGroup>
+    <Content Include="..\FortnitePirateTokenTracker.App\wwwroot\**\*"
+             Link="wwwroot\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
