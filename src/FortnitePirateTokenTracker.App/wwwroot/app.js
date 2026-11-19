@@ -99,14 +99,29 @@ function renderStats() {
 
 /* ---------------- cofres ---------------- */
 
+/** «UnsavedReplay-2026.11.15-18.53.59.replay» → «15/11/2026 - 18:53». */
+function matchLabel(file) {
+  const match = /(\d{4})\.(\d{2})\.(\d{2})-(\d{2})\.(\d{2})/.exec(file || '');
+  return match ? `${match[3]}/${match[2]}/${match[1]} - ${match[4]}:${match[5]}` : (file || '—');
+}
+
 function renderChests() {
   const onlyTokens = $('onlyTokens').checked;
-  const chests = (state.report?.chests ?? []).filter((c) => !onlyTokens || c.isToken);
+
+  // La más reciente arriba: el informe llega en el orden en que se guardó cada partida, que
+  // no es el de sus fechas, y así la lista parecía no cambiar nunca.
+  const cuando = new Map((state.report?.matches ?? []).map((m) => [m.replayFile, m.playedAt ? Date.parse(m.playedAt) : 0]));
+  const chests = (state.report?.chests ?? [])
+    .filter((c) => !onlyTokens || c.isToken)
+    .sort((a, b) => {
+      const porPartida = (cuando.get(b.replayFile) ?? 0) - (cuando.get(a.replayFile) ?? 0);
+      return porPartida !== 0 ? porPartida : (b.timeMs ?? 0) - (a.timeMs ?? 0);
+    });
   const body = $('chestTable').querySelector('tbody');
 
   body.innerHTML = chests.slice(0, 400).map((c) => `
     <tr>
-      <td class="mono">${esc(c.replayFile)}</td>
+      <td class="mono">${esc(matchLabel(c.replayFile))}</td>
       <td class="mono">${esc(c.timeLabel)}</td>
       <td>${esc(c.containerClass)}${c.itemId ? `<div class="muted small mono">${esc(c.itemId)}</div>` : ''}</td>
       <td>${c.isLocalPlayer ? '<span class="tag tag-local">yo</span>' : esc(c.playerName ?? '—')}</td>
@@ -120,6 +135,10 @@ function renderChests() {
   const unattributed = (state.report?.chests ?? []).filter((c) => !c.playerName).length;
   $('chestAttributionNote').textContent = unattributed > 0
     ? `${unattributed} aperturas sin jugador atribuido: son cofres cuyo grupo replica la búsqueda con una clase del lector oficial que no expone el pawn ni la posición, así que no hay con qué casarlos.`
+    : '';
+
+  $('chestUpdated').textContent = state.loadedAt
+    ? `${chests.length.toLocaleString('es-ES')} eventos · actualizado ${state.loadedAt}`
     : '';
 
   $('chestEmpty').hidden = chests.length > 0;
@@ -157,7 +176,7 @@ function renderPrizes() {
     const raw = c.itemId || '';
     const label = raw && !/cosmetics\.variant|immutable|sin identificar/i.test(raw) ? raw : 'Tesoro del evento';
     const source = /dorado/i.test(c.containerClass || '') ? 'cofre dorado' : 'habilidad del evento';
-    return `<li><strong>${esc(label)}</strong> · ${esc(who)} · ${when} · ${esc(source)} · ${esc((c.replayFile || '').replace('.replay', ''))}</li>`;
+    return `<li><strong>${esc(label)}</strong> · ${esc(who)} · ${when} · ${esc(source)} · ${esc(matchLabel(c.replayFile))}</li>`;
   }).join('');
 
   const found = new Map((state.report?.categories ?? []).map((c) => [c.key, c.found]));
@@ -222,7 +241,7 @@ function renderMatches() {
   $('matchesList').innerHTML = matches.map((match) => `
     <div class="match">
       <div class="match-main">
-        <div class="match-name">${esc(match.replayFile)}</div>
+        <div class="match-name">${esc(matchLabel(match.replayFile))}</div>
         <div class="match-meta">
           ${esc(match.playedAt ? new Date(match.playedAt).toLocaleString('es-ES') : 'fecha desconocida')}
           · ${esc(match.mode)} · ${esc(Math.round((match.lengthSeconds ?? 0) / 60))} min · ${esc(match.players)} jugadores
@@ -478,6 +497,7 @@ async function load() {
   try {
     const data = await api('/api/state');
     Object.assign(state, data);
+    state.loadedAt = new Date().toLocaleTimeString('es-ES');
     renderAll();
   } catch (error) {
     toast(`No se pudo cargar el panel: ${error.message}`, true);
@@ -485,3 +505,11 @@ async function load() {
 }
 
 load();
+
+// Se refresca solo: al terminar un análisis o al aparecer repes nuevas, la lista de eventos
+// cambia sin recargar la página.
+setInterval(() => {
+  if (!document.hidden) {
+    load();
+  }
+}, 10000);
