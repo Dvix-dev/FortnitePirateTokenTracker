@@ -132,27 +132,110 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         "[A-Za-z][A-Za-z0-9_]*:[A-Za-z0-9_.\\-]+|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
         System.Text.RegularExpressions.RegexOptions.Compiled);
 
-    public CapturingReader(ParseMode mode, bool abilityProbe = false) : base(null, mode)
+    /// <summary>Identificador del premio del evento tal cual viaja en el flujo.</summary>
+    private static readonly System.Text.RegularExpressions.Regex PrizeToken = new(
+        "[A-Za-z][A-Za-z0-9_]*:dpid_[A-Za-z0-9_.\\-]+|DelilahPrize:[A-Za-z0-9_.\\-]+",
+        System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Busca el identificador del premio dentro del hueco de una propiedad de la habilidad
+    /// concedida. Es la misma idea que el bloque opaco del cofre: el id viaja como texto suelto
+    /// y puede empezar en cualquier bit, así que se prueban los ocho desplazamientos.
+    /// </summary>
+    private static string? ScanPrizeText(byte[] data, int startBit, int numBits)
+    {
+        var available = data.Length * 8 - startBit;
+        if (available < 64 || numBits < 64)
+        {
+            return null;
+        }
+
+        // El bloque puede ser mayor que los bytes recibidos; se limita a lo que hay y a un
+        // tamaño razonable para no recorrer listas completas ocho veces.
+        numBits = Math.Min(Math.Min(numBits, available), 131_072);
+
+        for (var shift = 0; shift < 8; shift++)
+        {
+            var text = new System.Text.StringBuilder();
+            for (var bit = startBit + shift; bit + 8 <= startBit + numBits; bit += 8)
+            {
+                var value = 0;
+                for (var k = 0; k < 8; k++)
+                {
+                    var position = bit + k;
+                    value |= ((data[position >> 3] >> (position & 7)) & 1) << k;
+                }
+
+                if (value is >= 32 and < 127)
+                {
+                    text.Append((char)value);
+                    continue;
+                }
+
+                if (text.Length >= 8)
+                {
+                    var match = PrizeToken.Match(text.ToString());
+                    if (match.Success)
+                    {
+                        return match.Value;
+                    }
+                }
+
+                text.Clear();
+            }
+
+            if (text.Length >= 8)
+            {
+                var match = PrizeToken.Match(text.ToString());
+                if (match.Success)
+                {
+                    return match.Value;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public CapturingReader(ParseMode mode, bool abilityProbe = false, bool prizeScan = false) : base(null, mode)
     {
         // Las habilidades del jugador no las decodifica la librería (sus campos no llevan
         // nombre exportado). RawProbe entrega sus bits en crudo y aquí se busca qué
         // habilidad de premio se concedió y cuándo.
         // Desactivado por defecto: interceptar los bits de la lista de habilidades multiplica
         // por diez el tiempo de análisis. Se activa con TT_ABILITY_PROBE=1 para depurar.
-        if (abilityProbe || Environment.GetEnvironmentVariable("TT_ABILITY_PROBE") == "1")
+        var probeAbilities = abilityProbe || Environment.GetEnvironmentVariable("TT_ABILITY_PROBE") == "1";
+
+        // Investigación: busca el identificador del premio en TODO el flujo, no solo en el
+        // cofre o en la habilidad. Interceptar cada campo desincroniza la lectura, así que
+        // solo se usa en la segunda pasada y no en la que cuenta cofres.
+        var scanPrizes = prizeScan;
+
+        if (probeAbilities || scanPrizes)
         {
-        RawProbe.Filter = path => path.Contains("FortAbilitySystemComponent", StringComparison.Ordinal);
-        RawProbe.Sink = (channel, group, field, data, bits) =>
-        {
-            if (group.Contains("AbilitySystemComponent", StringComparison.Ordinal)
-                && group.EndsWith("_ClassNetCache", StringComparison.Ordinal)
-                && field is "?" or "ActivatableAbilities"
-                && _treasureHandlerGuids.Count > 0)
+            RawProbe.Filter = path => scanPrizes
+                                      || path.Contains("FortAbilitySystemComponent", StringComparison.Ordinal);
+            RawProbe.Sink = (channel, group, field, data, bits) =>
             {
-                _abilityPayloads++;
-                ReadAbilityGrants(channel, data, bits);
-            }
-        };
+                if (scanPrizes)
+                {
+                    var token = ScanPrizeText(data, 0, bits);
+                    if (token is not null)
+                    {
+                        PrizeTexts.Add((NowSeconds, channel, token));
+                    }
+                }
+
+                if (probeAbilities
+                    && group.Contains("AbilitySystemComponent", StringComparison.Ordinal)
+                    && group.EndsWith("_ClassNetCache", StringComparison.Ordinal)
+                    && field is "?" or "ActivatableAbilities"
+                    && _treasureHandlerGuids.Count > 0)
+                {
+                    _abilityPayloads++;
+                    ReadAbilityGrants(channel, data, bits);
+                }
+            };
         }
 
         PromoteGroup(
@@ -224,6 +307,9 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
 
     public List<ContainerSnapshot> Containers { get; } = new();
     public List<PrizeEvent> Prizes { get; } = new();
+
+    /// <summary>Identificadores de premio vistos en cualquier punto del flujo, con su instante.</summary>
+    public List<(double TimeSeconds, uint Channel, string Token)> PrizeTexts { get; } = new();
     public List<PickupSnapshot> Pickups { get; } = new();
     public List<string> UnknownGroups { get; } = new();
     public List<string> Warnings { get; } = new();
@@ -970,6 +1056,8 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
             for (var i = 0; i < changed; i++)
             {
                 var elementId = (int)Read(32);
+                var elementOwner = channel < Channels.Length ? Channels[channel]?.ActorId ?? 0 : 0;
+                string? elementPrize = null;
                 while (true)
                 {
                     var handle = ReadPacked();
@@ -1024,7 +1112,24 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
                     }
                     else
                     {
+                        // Las propiedades de la habilidad (tags, datos de activación) pueden
+                        // llevar el identificador del premio como texto.
+                        elementPrize ??= ScanPrizeText(data, pos, numBits);
                         pos += numBits;
+                    }
+                }
+
+                // El id puede venir después de la referencia a la habilidad: se pega al premio
+                // ya registrado para este elemento.
+                if (elementPrize is not null)
+                {
+                    var target = Prizes.LastOrDefault(p => p.Source == "habilidad"
+                                                          && p.Tier == elementId
+                                                          && p.OwnerPersistentId == elementOwner
+                                                          && string.IsNullOrEmpty(p.PrizeTemplateId));
+                    if (target is not null)
+                    {
+                        target.PrizeTemplateId = elementPrize;
                     }
                 }
             }

@@ -136,6 +136,10 @@ function renderPrizes() {
     .sort((a, b) => (b.timeMs ?? 0) - (a.timeMs ?? 0));
 
   $('treasureCount').textContent = treasures.length;
+  const mine = treasures.filter((c) => c.isLocalPlayer).length;
+  $('treasureSummary').textContent = treasures.length === 0
+    ? ''
+    : `${mine} ${mine === 1 ? 'tuyo' : 'tuyos'} · ${new Set(treasures.map((c) => c.replayFile)).size} partidas`;
   $('treasureEmpty').hidden = treasures.length > 0;
   $('treasureList').innerHTML = treasures.slice(0, 30).map((c) => {
     const seconds = Math.floor((c.timeMs ?? 0) / 1000);

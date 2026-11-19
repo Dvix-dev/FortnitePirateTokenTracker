@@ -16,7 +16,7 @@ public sealed class ReplayAnalyzer
     private const string CacheFileName = "parsed-replays.json";
 
     /// <summary>Subir esto invalida la caché cuando cambian las reglas de detección.</summary>
-    private const string CurrentParserVersion = "20";
+    private const string CurrentParserVersion = "22";
 
     private readonly AppConfig _config;
     private readonly string _dataDir;
@@ -194,15 +194,66 @@ public sealed class ReplayAnalyzer
         {
             try
             {
-                var profundo = new CapturingReader(ParseMode.Debug, abilityProbe: true);
+                var profundo = new CapturingReader(
+                    ParseMode.Debug,
+                    abilityProbe: true,
+                    prizeScan: Environment.GetEnvironmentVariable("TT_PRIZE_SCAN") == "1");
                 using var stream2 = new FileStream(
                     file, FileMode.Open, FileAccess.Read,
                     FileShare.ReadWrite | FileShare.Delete);
                 profundo.ReadReplay(stream2);
 
+                // Si en el flujo apareció el identificador del premio en ese mismo instante,
+                // se le asigna al tesoro que no lo traía. El id se replica aparte de la
+                // habilidad, pocos segundos alrededor de la concesión.
+                foreach (var prize in profundo.Prizes.Where(p => p.Source == "habilidad"
+                                                                && string.IsNullOrEmpty(p.PrizeTemplateId)
+                                                                && profundo.PrizeTexts.Count > 0))
+                {
+                    var near = profundo.PrizeTexts
+                        .Where(t => Math.Abs(t.TimeSeconds - prize.TimeSeconds) <= 4)
+                        .OrderBy(t => Math.Abs(t.TimeSeconds - prize.TimeSeconds))
+                        .FirstOrDefault();
+
+                    if (!string.IsNullOrEmpty(near.Token))
+                    {
+                        prize.PrizeTemplateId = near.Token;
+                    }
+                }
+
                 foreach (var prize in profundo.Prizes.Where(p => p.Source == "habilidad" && p.OwnerPersistentId is not null))
                 {
                     reader.Prizes.Add(prize);
+                }
+
+                if (Environment.GetEnvironmentVariable("TT_TIME") == "1")
+                {
+                    foreach (var prize in profundo.Prizes.Where(p => p.Source == "habilidad"))
+                    {
+                        Console.WriteLine(
+                            $"[tesoro] {prize.TimeSeconds:F1}s {prize.TierData ?? "?"} premio={prize.PrizeTemplateId ?? "(sin id)"} dueno={prize.OwnerKey ?? "-"} t={prize.Tier}");
+                    }
+
+                    foreach (var text in profundo.PrizeTexts.Take(40))
+                    {
+                        Console.WriteLine($"[premio-texto] {text.TimeSeconds:F1}s canal={text.Channel} {text.Token}");
+                    }
+
+                    foreach (var tag in profundo.InterestingTags().Distinct().Take(20))
+                    {
+                        Console.WriteLine($"[tag] {tag}");
+                    }
+
+                    foreach (var group in profundo.GroupPaths
+                                 .Where(g => g.Key.Contains("Delilah", StringComparison.OrdinalIgnoreCase)
+                                             || g.Key.Contains("Prize", StringComparison.OrdinalIgnoreCase)
+                                             || g.Key.Contains("Gizmo", StringComparison.OrdinalIgnoreCase)
+                                             || g.Key.Contains("Treasure", StringComparison.OrdinalIgnoreCase))
+                                 .OrderByDescending(g => g.Value)
+                                 .Take(20))
+                    {
+                        Console.WriteLine($"[grupo] {group.Value,6}  {group.Key}");
+                    }
                 }
             }
             catch (Exception ex)
