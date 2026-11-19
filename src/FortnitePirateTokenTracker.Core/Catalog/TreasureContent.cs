@@ -31,18 +31,15 @@ public static class TreasureContent
             return null;
         }
 
-        if (_kinds.Value.TryGetValue(kind, out var mapped))
-        {
-            return mapped;
-        }
-
+        // La clave tiene que coincidir con la del catálogo del panel, que es la que se cuenta
+        // en «encontrados». El fichero de contenido habla de "car"/"jam"/"loading".
         return kind switch
         {
             "car" => "vehicle",
             "jam" => "jamTrack",
             "loading" => "loadingScreen",
             "pirate-shop" => "token",
-            _ => kind
+            _ => _kinds.Value.TryGetValue(kind, out var mapped) ? mapped : kind
         };
     }
 

@@ -136,6 +136,14 @@ function renderPrizes() {
     .sort((a, b) => (b.timeMs ?? 0) - (a.timeMs ?? 0));
 
   $('treasureCount').textContent = treasures.length;
+
+  const unknown = treasures.filter((c) => {
+    const raw = c.itemId || '';
+    return !raw || /cosmetics\.variant|immutable|sin identificar/i.test(raw);
+  }).length;
+  $('treasureUnknown').textContent = unknown > 0
+    ? `${unknown} llegaron como «tesoro del evento»: la repetición no envía qué premio cayó, solo quién lo recibió y cuándo.`
+    : '';
   const mine = treasures.filter((c) => c.isLocalPlayer).length;
   $('treasureSummary').textContent = treasures.length === 0
     ? ''
@@ -147,7 +155,7 @@ function renderPrizes() {
     const who = c.isLocalPlayer ? 'tú' : (c.playerName || 'sin identificar');
     // Los análisis antiguos pudieron guardar basura del parser anterior como identificador.
     const raw = c.itemId || '';
-    const label = raw && !/cosmetics\.variant|immutable/i.test(raw) ? raw : 'premio sin identificar';
+    const label = raw && !/cosmetics\.variant|immutable|sin identificar/i.test(raw) ? raw : 'Tesoro del evento';
     const source = /dorado/i.test(c.containerClass || '') ? 'cofre dorado' : 'habilidad del evento';
     return `<li><strong>${esc(label)}</strong> · ${esc(who)} · ${when} · ${esc(source)} · ${esc((c.replayFile || '').replace('.replay', ''))}</li>`;
   }).join('');

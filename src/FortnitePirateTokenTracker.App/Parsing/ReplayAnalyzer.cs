@@ -16,7 +16,7 @@ public sealed class ReplayAnalyzer
     private const string CacheFileName = "parsed-replays.json";
 
     /// <summary>Subir esto invalida la caché cuando cambian las reglas de detección.</summary>
-    private const string CurrentParserVersion = "23";
+    private const string CurrentParserVersion = "24";
 
     private readonly AppConfig _config;
     private readonly string _dataDir;
@@ -414,6 +414,7 @@ public sealed class ReplayAnalyzer
         // Si en la partida se concedió un tesoro, se repite la lectura habilitando la vía
         // cruda de las habilidades: así se sabe quién lo recibió (y a veces qué premio es).
         if (reader.TreasureHandlerClasses.Any()
+            && !reader.SinglePass
             && (abilityProbe || Environment.GetEnvironmentVariable("TT_DEEP_TREASURE") == "1"))
         {
             try
@@ -475,13 +476,16 @@ public sealed class ReplayAnalyzer
                         Console.WriteLine($"[tag] {tag}");
                     }
 
+                    var claves = new[]
+                    {
+                        "Delilah", "Prize", "Gizmo", "Treasure", "Gift", "Bonus", "Reward",
+                        "Unlock", "Cosmetic", "Locker", "Event", "Token", "Chest"
+                    };
+
                     foreach (var group in profundo.GroupPaths
-                                 .Where(g => g.Key.Contains("Delilah", StringComparison.OrdinalIgnoreCase)
-                                             || g.Key.Contains("Prize", StringComparison.OrdinalIgnoreCase)
-                                             || g.Key.Contains("Gizmo", StringComparison.OrdinalIgnoreCase)
-                                             || g.Key.Contains("Treasure", StringComparison.OrdinalIgnoreCase))
+                                 .Where(g => claves.Any(k => g.Key.Contains(k, StringComparison.OrdinalIgnoreCase)))
                                  .OrderByDescending(g => g.Value)
-                                 .Take(20))
+                                 .Take(45))
                     {
                         Console.WriteLine($"[grupo] {group.Value,6}  {group.Key}");
                     }
@@ -494,6 +498,28 @@ public sealed class ReplayAnalyzer
         }
 
         parsed.Warnings.AddRange(reader.Warnings.Distinct().Take(25));
+
+        if (Environment.GetEnvironmentVariable("TT_PROFILE") == "1")
+        {
+            var frecuencia = (double)System.Diagnostics.Stopwatch.Frequency;
+            Console.WriteLine(
+                $"[perfil] captura={reader.CaptureMilliseconds:F0}ms ({reader.CaptureCalls} exportaciones) "
+                + $"grupos={Unreal.Core.Models.NetGuidCache.LookupCalls} ({Unreal.Core.Models.NetGuidCache.LookupTicks * 1000.0 / frecuencia:F0}ms) "
+                + $"campos={Unreal.Core.NetFieldParser.ReadFieldCalls} ({Unreal.Core.NetFieldParser.ReadFieldTicks * 1000.0 / frecuencia:F0}ms)");
+        }
+
+        if (Environment.GetEnvironmentVariable("TT_DUMP") == "1")
+        {
+            foreach (var download in reader.CosmeticDownloads.Take(300))
+            {
+                Console.WriteLine($"[cosmetico] {download}");
+            }
+
+            foreach (var pickup in reader.Pickups.OrderBy(p => p.TimeSeconds).Take(300))
+            {
+                Console.WriteLine($"[pickup] {pickup.TimeSeconds:F1}s {pickup.ItemId} ({pickup.ClassName})");
+            }
+        }
 
         if (replay is not null)
         {
@@ -991,7 +1017,7 @@ public sealed class ReplayAnalyzer
                 ? prize.TierData
                 : null;
             var shown = prizeName ?? prizeId
-                        ?? (handler is not null ? "Tesoro del evento (premio sin identificar)" : null);
+                        ?? (handler is not null ? "Tesoro del evento" : null);
 
             var timeMs = (int)Math.Round(prize.TimeSeconds * 1000);
             var containerClass = prize.Source == "habilidad"

@@ -213,6 +213,36 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
 
         if (probeAbilities || scanPrizes)
         {
+            InstallAbilityProbe(probeAbilities, scanPrizes);
+        }
+        else
+        {
+            // El probe es del hilo: si una lectura anterior (la pasada profunda) lo dejó puesto,
+            // esta lectura dejaría de decodificar sus grupos y perdería cofres.
+            RawProbe.Filter = null;
+            RawProbe.Sink = null;
+
+            // Una sola pasada: el probe se enciende en cuanto aparece la habilidad del tesoro,
+            // así no hace falta releer la repetición entera solo para saber quién lo recibió.
+            _probeOnDemand = Environment.GetEnvironmentVariable("TT_ONE_PASS") == "1";
+        }
+
+        PromoteGroup(
+            "/Game/Building/ActorBlueprints/Containers/Tiered_Chest_Athena.Tiered_Chest_Athena_C",
+            "/Tokenizer/TieredChestAthena");
+        PromoteGroup(
+            "/Game/Building/ActorBlueprints/Containers/Tiered_Ammo_Athena.Tiered_Ammo_Athena_C",
+            "/Tokenizer/TieredAmmoAthena");
+    }
+
+    private bool _probeOnDemand;
+
+    /// <summary>Devuelve true si la lectura se hizo en una sola pasada (sin releer).</summary>
+    public bool SinglePass { get; private set; }
+
+    private void InstallAbilityProbe(bool probeAbilities, bool scanPrizes)
+    {
+        {
             RawProbe.Filter = path => scanPrizes
                                       || path.Contains("FortAbilitySystemComponent", StringComparison.Ordinal);
             RawProbe.Sink = (channel, group, field, data, bits) =>
@@ -237,20 +267,6 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
                 }
             };
         }
-        else
-        {
-            // El probe es del hilo: si una lectura anterior (la pasada profunda) lo dejó puesto,
-            // esta lectura dejaría de decodificar sus grupos y perdería cofres.
-            RawProbe.Filter = null;
-            RawProbe.Sink = null;
-        }
-
-        PromoteGroup(
-            "/Game/Building/ActorBlueprints/Containers/Tiered_Chest_Athena.Tiered_Chest_Athena_C",
-            "/Tokenizer/TieredChestAthena");
-        PromoteGroup(
-            "/Game/Building/ActorBlueprints/Containers/Tiered_Ammo_Athena.Tiered_Ammo_Athena_C",
-            "/Tokenizer/TieredAmmoAthena");
     }
 
     /// <summary>
@@ -448,6 +464,10 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
             else if (exportGroup is TreasureHuntChest prizeChest)
             {
                 TrackPrizeChest(channelIndex, prizeChest);
+            }
+            else if (exportGroup is FortnitePirateTokenTracker.ReplayReader.CosmeticDownload download)
+            {
+                TrackCosmeticDownload(download);
             }
             else if (exportGroup is BaseContainer container)
             {
@@ -875,6 +895,21 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
         }
     }
 
+    /// <summary>Cosméticos que el juego descarga al jugador (posible premio del tesoro).</summary>
+    public List<string> CosmeticDownloads { get; } = new();
+
+    private void TrackCosmeticDownload(FortnitePirateTokenTracker.ReplayReader.CosmeticDownload download)
+    {
+        var asset = download.AssetName ?? download.PackageName ?? download.SubPathString;
+        if (string.IsNullOrWhiteSpace(asset))
+        {
+            return;
+        }
+
+        var slot = download.SlotTag ?? "";
+        CosmeticDownloads.Add($"{NowSeconds:F1}s {slot} {asset}");
+    }
+
     private void TrackPrizeChest(uint channelIndex, TreasureHuntChest prizeChest)
     {
         var opener = prizeChest.OpeningPawn ?? prizeChest.Instigator;
@@ -884,13 +919,25 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
             (x, y, z, hasPosition) = (actorPosition.X, actorPosition.Y, actorPosition.Z, true);
         }
 
+        // El premio no es un tag: es un bloque opaco con el id en texto
+        // (por ejemplo "DelilahPrize:dpid_item4").
+        var prizeText = ReadOpaqueText(prizeChest.PrizeTemplateId);
+
+        // El cofre también referencia el premio por NetGUID. Su ruta suele terminar en el
+        // identificador ("/.../DelilahPrize_dpid_item18"): es la única pista cuando el bloque
+        // opaco llega sin texto.
+        string? tierPath = null;
+        if (prizeChest.TierData is { } tierGuid && _netGuidCache.TryGetPathName(tierGuid, out var tierName))
+        {
+            tierPath = tierName;
+            prizeText ??= PrizeFromPath(tierName);
+        }
+
         Prizes.Add(new PrizeEvent
         {
             TimeSeconds = NowSeconds,
-            // El premio no es un tag: es un bloque opaco con el id en texto
-            // (por ejemplo "DelilahPrize:dpid_item4").
-            PrizeTemplateId = ReadOpaqueText(prizeChest.PrizeTemplateId),
-            TierData = ReadOpaqueText(prizeChest.Tier),
+            PrizeTemplateId = prizeText,
+            TierData = tierPath ?? ReadOpaqueText(prizeChest.Tier),
             Success = prizeChest.bSuccess != false,
             OpeningPawn = opener,
             OwnerPersistentId = prizeChest.OwnerPersistentID is { } owner ? (uint?)owner.IntPacked : null,
@@ -902,6 +949,24 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
             ClassName = prizeChest.GetType().Name,
             Source = "cofre"
         });
+    }
+
+    /// <summary>Saca el id del premio de una ruta replicada (".../DelilahPrize_dpid_item18").</summary>
+    private static string? PrizeFromPath(string path)
+    {
+        var start = path.IndexOf("dpid_", StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+        {
+            return null;
+        }
+
+        var end = start;
+        while (end < path.Length && (char.IsLetterOrDigit(path[end]) || path[end] is '_' or '-' or '.'))
+        {
+            end++;
+        }
+
+        return "DelilahPrize:" + path[start..end].TrimEnd('.', '-');
     }
 
     /// <summary>
@@ -997,6 +1062,14 @@ public sealed class CapturingReader : FortniteReplayReader.ReplayReader
 
         var handler = name.Replace("Default__", "", StringComparison.Ordinal);
         _treasureHandlerGuids[netGuid] = handler;
+
+        // Ya sabemos que en esta partida hay tesoro: se enciende el probe de habilidades ahora
+        // mismo y la concesión se lee en esta misma pasada.
+        if (_probeOnDemand)
+        {
+            InstallAbilityProbe(probeAbilities: true, scanPrizes: false);
+            SinglePass = true;
+        }
 
         // La clase de la habilidad se envía la primera vez que el jugador recibe un tesoro:
         // es la señal más barata de que en esta partida cayó alguno.

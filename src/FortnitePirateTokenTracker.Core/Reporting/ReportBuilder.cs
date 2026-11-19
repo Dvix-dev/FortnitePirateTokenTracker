@@ -125,7 +125,7 @@ public static class ReportBuilder
                 Accent = p.Accent,
                 Found = p.Key == "token"
                     ? tokens.Count
-                    : report.Chests.Count(c => c.Category == p.Key)
+                    : report.Chests.Count(c => PanelKey(c.Category) == p.Key)
             })
             .ToList();
 
@@ -144,6 +144,19 @@ public static class ReportBuilder
 
         return report;
     }
+
+    /// <summary>
+    /// Clave del panel para la categoría guardada. Los análisis antiguos guardaron la clase del
+    /// catálogo ("car", "jam") en vez de la clave del panel ("vehicle", "jamTrack").
+    /// </summary>
+    private static string? PanelKey(string? category) => category switch
+    {
+        "car" => "vehicle",
+        "jam" => "jamTrack",
+        "loading" => "loadingScreen",
+        "pirate-shop" => "token",
+        _ => category
+    };
 
     private static string ZoneName(ParsedChest chest)
     {

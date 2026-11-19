@@ -131,3 +131,23 @@ public class WoodenCrateD : TrackedContainer
 
 // El cofre dorado del tesoro (BGA_DelilahTreasureHuntAnimatedChest) ya viene modelado por
 // la librería local: su PrizeTemplateId es un bloque opaco que contiene el id del premio.
+
+/// <summary>
+/// Cosmético que el juego descarga al jugador. Cuando recibe un tesoro, la repetición
+/// replica la descarga del premio: el nombre del paquete y del recurso, y la ranura.
+/// </summary>
+[NetFieldExportGroup("/Script/FortniteGame.FortPlayerStateComponent_CosmeticDownloads", minimalParseMode: ParseMode.Debug)]
+public class CosmeticDownload : INetFieldExportGroup
+{
+    [NetFieldExport("PackageName", RepLayoutCmdType.PropertyName)]
+    public string? PackageName { get; set; }
+
+    [NetFieldExport("AssetName", RepLayoutCmdType.PropertyName)]
+    public string? AssetName { get; set; }
+
+    [NetFieldExport("SubPathString", RepLayoutCmdType.PropertyString)]
+    public string? SubPathString { get; set; }
+
+    [NetFieldExport("SlotTag", RepLayoutCmdType.PropertyName)]
+    public string? SlotTag { get; set; }
+}
