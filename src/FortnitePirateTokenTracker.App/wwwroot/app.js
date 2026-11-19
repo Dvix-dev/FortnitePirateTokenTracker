@@ -105,18 +105,26 @@ function matchLabel(file) {
   return match ? `${match[3]}/${match[2]}/${match[1]} - ${match[4]}:${match[5]}` : (file || '—');
 }
 
+/** Instante de la partida según su nombre de fichero (el mismo que se muestra). */
+function matchTime(file) {
+  const match = /(\d{4})\.(\d{2})\.(\d{2})-(\d{2})\.(\d{2})/.exec(file || '');
+  return match ? Date.parse(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:00Z`) : 0;
+}
+
+/** Ordena de la partida más reciente a la más antigua y, dentro, del evento más tardío. */
+function byMatchThenTime(a, b) {
+  const porPartida = matchTime(b.replayFile) - matchTime(a.replayFile);
+  return porPartida !== 0 ? porPartida : (b.timeMs ?? 0) - (a.timeMs ?? 0);
+}
+
 function renderChests() {
   const onlyTokens = $('onlyTokens').checked;
 
   // La más reciente arriba: el informe llega en el orden en que se guardó cada partida, que
   // no es el de sus fechas, y así la lista parecía no cambiar nunca.
-  const cuando = new Map((state.report?.matches ?? []).map((m) => [m.replayFile, m.playedAt ? Date.parse(m.playedAt) : 0]));
   const chests = (state.report?.chests ?? [])
     .filter((c) => !onlyTokens || c.isToken)
-    .sort((a, b) => {
-      const porPartida = (cuando.get(b.replayFile) ?? 0) - (cuando.get(a.replayFile) ?? 0);
-      return porPartida !== 0 ? porPartida : (b.timeMs ?? 0) - (a.timeMs ?? 0);
-    });
+    .sort(byMatchThenTime);
   const body = $('chestTable').querySelector('tbody');
 
   body.innerHTML = chests.slice(0, 400).map((c) => `
@@ -152,7 +160,7 @@ function renderChests() {
 function renderPrizes() {
   const treasures = (state.report?.chests ?? [])
     .filter((c) => /tesoro|dorado/i.test(c.containerClass || ''))
-    .sort((a, b) => (b.timeMs ?? 0) - (a.timeMs ?? 0));
+    .sort(byMatchThenTime);
 
   $('treasureCount').textContent = treasures.length;
 
@@ -176,7 +184,7 @@ function renderPrizes() {
     const raw = c.itemId || '';
     const label = raw && !/cosmetics\.variant|immutable|sin identificar/i.test(raw) ? raw : 'Tesoro del evento';
     const source = /dorado/i.test(c.containerClass || '') ? 'cofre dorado' : 'habilidad del evento';
-    return `<li><strong>${esc(label)}</strong> · ${esc(who)} · ${when} · ${esc(source)} · ${esc(matchLabel(c.replayFile))}</li>`;
+    return `<li><strong>${esc(matchLabel(c.replayFile))}</strong> · ${esc(when)} de partida · ${esc(label)} · ${esc(who)} · ${esc(source)}</li>`;
   }).join('');
 
   const found = new Map((state.report?.categories ?? []).map((c) => [c.key, c.found]));
