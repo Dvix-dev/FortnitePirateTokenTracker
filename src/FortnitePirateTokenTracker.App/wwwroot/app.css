@@ -541,6 +541,110 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 
 .map-card { padding: 14px; }
 
+.map-tools {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #17171c;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+
+.icon-btn:hover,
+.icon-btn[aria-expanded="true"] {
+  color: var(--gold);
+  border-color: var(--gold-edge);
+  background: rgba(255, 212, 0, 0.08);
+}
+
+.map-pop {
+  position: absolute;
+  top: 42px;
+  right: 0;
+  z-index: 5;
+  width: 236px;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #16161b;
+  box-shadow: 0 22px 44px -24px rgba(0, 0, 0, 0.95);
+}
+
+.map-pop[hidden] { display: none; }
+
+.map-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.map-field > span { grid-column: 1; grid-row: 1; }
+
+.map-field b {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.map-field input[type="range"] {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  width: 100%;
+  accent-color: var(--gold);
+}
+
+.seg {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #101014;
+}
+
+.seg button {
+  padding: 7px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.seg button.is-on {
+  background: var(--gold-grad-soft);
+  color: var(--gold);
+  box-shadow: inset 0 0 0 1px var(--gold-edge);
+}
+
 .map-stage {
   position: relative;
   max-width: 900px;

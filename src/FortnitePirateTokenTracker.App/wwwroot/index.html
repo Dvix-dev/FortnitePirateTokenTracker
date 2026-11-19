@@ -157,10 +157,32 @@
     <div class="card map-card">
       <div class="card-head">
         <h2>Mapa de calor</h2>
-        <label class="switch">
-          <input type="checkbox" id="mapOnlyTreasures">
-          <span>Solo tesoros</span>
-        </label>
+        <div class="map-tools">
+          <label class="switch">
+            <input type="checkbox" id="mapOnlyTreasures">
+            <span>Solo tesoros</span>
+          </label>
+          <button class="icon-btn" id="mapSettingsBtn" type="button" aria-label="Ajustes del mapa" aria-expanded="false" title="Ajustes del mapa">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3.2"></circle>
+              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path>
+            </svg>
+          </button>
+          <div class="map-pop" id="mapSettings" hidden>
+            <label class="map-field">
+              <span>Opacidad</span>
+              <input type="range" id="mapOpacity" min="10" max="100" step="5" value="50">
+              <b id="mapOpacityValue">50%</b>
+            </label>
+            <div class="map-field">
+              <span>Forma</span>
+              <div class="seg" id="mapShape">
+                <button type="button" data-shape="cells">Cuadros</button>
+                <button type="button" data-shape="blobs" class="is-on">Círculos</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="map-stage">
         <img src="img/map.webp" alt="Mapa del juego" id="mapImg" width="560" height="555">

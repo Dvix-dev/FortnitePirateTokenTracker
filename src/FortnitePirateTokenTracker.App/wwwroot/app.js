@@ -274,6 +274,7 @@ function renderMatches() {
 const MAP_IMG = { w: 560, h: 555, left: 30, top: 1, right: 520, bottom: 511 };
 const MAP_WORLD = { xMin: -60000, xMax: 94000, yMin: -62000, yMax: 98000 };
 const MAP_CELL = 5000;
+const mapPrefs = { opacity: 0.5, shape: 'blobs' };
 
 function mapPoint(x, y) {
   const w = MAP_IMG.right - MAP_IMG.left;
@@ -334,12 +335,17 @@ function renderMap() {
   const max = Math.max(2, counts.length ? counts[Math.floor(counts.length * 0.95)] : 2);
   const weight = (n) => Math.log1p(n) / Math.log1p(max);
 
-  for (const [key, n] of cells) {
+  const cellPx = Math.abs(mapPoint(MAP_CELL, 0).x - mapPoint(0, 0).x);
+  const blobs = mapPrefs.shape === 'blobs';
+  // De menor a mayor carga: así las zonas calientes quedan por encima y no las tapan las frías.
+  const ordered = blobs ? [...cells].sort((a, b) => a[1] - b[1]) : [...cells];
+
+  for (const [key, n] of ordered) {
     const [cx, cy] = key.split(':').map(Number);
     const a = mapPoint(cx * MAP_CELL, cy * MAP_CELL);
     const b = mapPoint((cx + 1) * MAP_CELL, (cy + 1) * MAP_CELL);
-    const x = Math.min(a.x, b.x) + 1;
-    const y = Math.min(a.y, b.y) + 1;
+    const left = Math.min(a.x, b.x);
+    const top = Math.min(a.y, b.y);
     const w = Math.abs(b.x - a.x) - 2;
     const h = Math.abs(b.y - a.y) - 2;
     if (w <= 0 || h <= 0) continue;
@@ -347,9 +353,26 @@ function renderMap() {
     // Las celdas con uno o dos cofres (posiciones aproximadas en la costa) se aclaran para que
     // no tapen el mapa como si fueran zonas cargadas.
     const t = weight(n);
-    ctx.fillStyle = heatColor(t, 0.24 + 0.5 * t);
+    const alpha = mapPrefs.opacity * (0.34 + 0.66 * t);
+
+    if (blobs) {
+      const cxp = left + (w + 2) / 2;
+      const cyp = top + (h + 2) / 2;
+      const radius = cellPx * 1.15;
+      const gradient = ctx.createRadialGradient(cxp, cyp, 0, cxp, cyp, radius);
+      gradient.addColorStop(0, heatColor(t, alpha));
+      gradient.addColorStop(0.5, heatColor(t, alpha * 0.55));
+      gradient.addColorStop(1, heatColor(t, 0));
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(cxp, cyp, radius, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
+
+    ctx.fillStyle = heatColor(t, alpha);
     ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 3);
+    ctx.roundRect(left + 1, top + 1, w, h, 3);
     ctx.fill();
   }
 
@@ -503,6 +526,44 @@ document.querySelectorAll('.tab').forEach((tab) => {
 
 $('onlyTokens').addEventListener('change', renderChests);
 $('mapOnlyTreasures').addEventListener('change', renderMap);
+
+$('mapSettingsBtn').addEventListener('click', (event) => {
+  event.stopPropagation();
+  const pop = $('mapSettings');
+  pop.hidden = !pop.hidden;
+  $('mapSettingsBtn').setAttribute('aria-expanded', String(!pop.hidden));
+});
+
+$('mapSettings').addEventListener('click', (event) => event.stopPropagation());
+
+document.addEventListener('click', () => {
+  $('mapSettings').hidden = true;
+  $('mapSettingsBtn').setAttribute('aria-expanded', 'false');
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    $('mapSettings').hidden = true;
+    $('mapSettingsBtn').setAttribute('aria-expanded', 'false');
+  }
+});
+
+$('mapOpacity').addEventListener('input', (event) => {
+  const value = Number(event.target.value);
+  mapPrefs.opacity = value / 100;
+  $('mapOpacityValue').textContent = `${value}%`;
+  renderMap();
+});
+
+$('mapShape').addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-shape]');
+  if (!button) return;
+  mapPrefs.shape = button.dataset.shape;
+  for (const option of $('mapShape').children) {
+    option.classList.toggle('is-on', option === button);
+  }
+  renderMap();
+});
 
 function openScanModal() {
   const total = state.replayCount ?? 0;
