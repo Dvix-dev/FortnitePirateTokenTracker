@@ -10,18 +10,12 @@ const state = {
   paths: null
 };
 
-const slotLabels = {
-  outfit: 'Outfit',
-  pickaxe: 'Pico',
-  backBling: 'Mochila',
-  glider: 'Planeadora',
-  loadingScreen: 'Pantalla de carga',
-  musicPack: 'Música',
-  pet: 'Mascota',
-  wrap: 'Envoltorio'
-};
-
 const $ = (id) => document.getElementById(id);
+
+/** Un contenedor es tesoro si su clase replicada lo marca como tal. */
+function isTreasure(chest) {
+  return /tesoro|dorado/i.test(chest?.containerClass || '');
+}
 
 function esc(value) {
   return String(value ?? '')
@@ -140,7 +134,7 @@ function renderChests() {
   // La más reciente arriba: el informe llega en el orden en que se guardó cada partida, que
   // no es el de sus fechas, y así la lista parecía no cambiar nunca.
   const chests = (state.report?.chests ?? [])
-    .filter((c) => !onlyTokens || c.isToken)
+    .filter((c) => !onlyTokens || isTreasure(c))
     .sort(byMatchThenTime);
   const body = $('chestTable').querySelector('tbody');
 
@@ -234,46 +228,16 @@ function renderPrizes() {
   `).join('');
 }
 
-/* ---------------- cosméticos ---------------- */
-
-function renderCosmetics() {
-  const entries = state.report?.cosmetics ?? [];
-  const grouped = new Map();
-
-  for (const entry of entries) {
-    const key = `${entry.isLocalPlayer ? 'yo' : ''}${entry.playerName}`;
-    if (!grouped.has(key)) {
-      grouped.set(key, { name: entry.playerName, isLocal: entry.isLocalPlayer, slots: [] });
-    }
-    if (entry.itemPath) {
-      grouped.get(key).slots.push(entry);
-    }
-  }
-
-  $('playersGrid').innerHTML = [...grouped.values()].map((player) => `
-    <div class="player-card">
-      <div class="player-head">
-        <span>${esc(player.name)}</span>
-        ${player.isLocal ? '<span class="tag tag-local">tú</span>' : ''}
-      </div>
-      <div class="slots">
-        ${player.slots.map((slot) => `
-          <div class="slot">
-            <span class="slot-name">${esc(slotLabels[slot.slot] ?? slot.slot)}</span>
-            <span class="slot-value">${esc(slot.itemPath)}</span>
-          </div>
-        `).join('') || '<span class="muted small">Sin cosméticos replicados</span>'}
-      </div>
-    </div>
-  `).join('');
-
-  $('cosmeticEmpty').hidden = grouped.size > 0;
-}
-
 /* ---------------- partidas ---------------- */
 
 function renderMatches() {
   const matches = [...(state.report?.matches ?? [])].reverse();
+
+  const treasuresByFile = new Map();
+  for (const chest of state.report?.chests ?? []) {
+    if (!isTreasure(chest)) continue;
+    treasuresByFile.set(chest.replayFile, (treasuresByFile.get(chest.replayFile) ?? 0) + 1);
+  }
 
   $('matchesList').innerHTML = matches.map((match) => `
     <div class="match">
@@ -288,7 +252,7 @@ function renderMatches() {
       <div class="match-numbers">
         <span>Cofres<b>${esc(match.chests)}</b></span>
         <span>Míos<b>${esc(match.myChests)}</b></span>
-        <span>Tokens<b>${esc(match.tokens)}</b></span>
+        <span>Tesoros<b>${esc(treasuresByFile.get(match.replayFile) ?? 0)}</b></span>
       </div>
     </div>
   `).join('');
@@ -298,19 +262,67 @@ function renderMatches() {
 
 /* ---------------- mapa de calor ---------------- */
 
-// Caja del mapa en píxeles de la imagen original y extensión del mundo que cubre.
-// Las celdas son las mismas de 50 m (5.000 unidades) que usa el informe.
-const MAP_IMG = { w: 560, h: 555, left: 30, top: 1, right: 520, bottom: 511 };
-const MAP_WORLD = { xMin: -60000, xMax: 94000, yMin: -62000, yMax: 98000 };
+// El mapa del juego está en unidades de Unreal (1 unidad = 1 cm). La transformación está
+// ajustada por mínimos cuadrados con las coordenadas reales de los POI que publica la API
+// del juego y rematada para que ningún cofre caiga en el agua. Ojo: +Y va hacia el sur, así
+// que la fila crece con la coordenada, sin invertir.
+const MAP_IMG = { w: 560, h: 555 };
+const MAP_SCALE = 0.00295;
+const MAP_OFFSET = { x: 246, y: 208 };
 const MAP_CELL = 5000;
-const mapPrefs = { opacity: 0.5, shape: 'blobs' };
+const mapPrefs = { opacity: 0.5, shape: 'blobs', metric: 'chests' };
 
 function mapPoint(x, y) {
-  const w = MAP_IMG.right - MAP_IMG.left;
-  const h = MAP_IMG.bottom - MAP_IMG.top;
-  const nx = (x - MAP_WORLD.xMin) / (MAP_WORLD.xMax - MAP_WORLD.xMin);
-  const ny = (y - MAP_WORLD.yMin) / (MAP_WORLD.yMax - MAP_WORLD.yMin);
-  return { x: MAP_IMG.left + nx * w, y: MAP_IMG.bottom - ny * h };
+  return { x: MAP_SCALE * x + MAP_OFFSET.x, y: MAP_SCALE * y + MAP_OFFSET.y };
+}
+
+// POI del mapa actual, en coordenadas del mundo (API oficial). Sirven para nombrar zonas.
+const POIS = [
+  ['Arlong Park', -51707, 16134],
+  ['Baratie', 65771, 69662],
+  ['Buggy’s Beachhead', 8270, -25088],
+  ['Busy Bay', 62269, 70367],
+  ['Cursed Cavern', 31432, 19822],
+  ['Giant’s Battlefield', -3614, 34262],
+  ['Henry', 34307, 73225],
+  ['Lantern Landing', -11770, 4994],
+  ['Loguetown', 1846, 55330],
+  ['Nami’s Tangerine Grove', -40304, 82390],
+  ['Plunder Port', 26307, 89235],
+  ['Rubber Resort', -24028, -45216],
+  ['The $.$. Rocky', 66471, 30308],
+  ['The Chest', -32433, -21391],
+  ['Windmill Village', -33592, 63719]
+];
+
+// Centro aproximado de la isla, para orientar lo que cae lejos de cualquier POI.
+const MAP_CENTER = { x: 12500, y: 25000 };
+
+function nearestPoi(x, y) {
+  let best = null;
+  for (const [name, px, py] of POIS) {
+    const distance = Math.hypot(x - px, y - py) / 100;
+    if (!best || distance < best.distance) best = { name, distance };
+  }
+  return best;
+}
+
+/** Nombre legible de una posición: el POI más cercano o la dirección desde el centro. */
+function zoneName(x, y) {
+  const near = nearestPoi(x, y);
+  if (near && near.distance <= 250) {
+    return { name: near.name, meters: Math.round(near.distance), kind: 'poi' };
+  }
+
+  const dx = x - MAP_CENTER.x;
+  const dy = y - MAP_CENTER.y;
+  const compass = ['este', 'sureste', 'sur', 'suroeste', 'oeste', 'noroeste', 'norte', 'noreste'];
+  const angle = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+  return {
+    name: `Campo abierto al ${compass[Math.round(angle / 45) % 8]}`,
+    meters: Math.round(Math.hypot(dx, dy) / 100),
+    kind: 'field'
+  };
 }
 
 /** Amarillo (poco) → naranja → rojo (mucho). */
@@ -341,14 +353,14 @@ function renderMap() {
   ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
   ctx.clearRect(0, 0, MAP_IMG.w, MAP_IMG.h);
 
-  const onlyTreasures = $('mapOnlyTreasures').checked;
+  const metric = mapPrefs.metric;
   const chests = state.report?.chests ?? [];
+  const source = metric === 'treasures' ? chests.filter(isTreasure) : chests;
   const cells = new Map();
   let placed = 0;
   let total = 0;
 
-  for (const chest of chests) {
-    if (onlyTreasures && !/tesoro|dorado/i.test(chest.containerClass || '')) continue;
+  for (const chest of source) {
     total++;
     const x = Number(chest.x);
     const y = Number(chest.y);
@@ -361,6 +373,7 @@ function renderMap() {
   // Escala logarítmica: casi todas las celdas tienen pocos cofres y unas pocas muchos, así que
   // sin comprimir la escala el mapa saldría amarillo entero.
   const counts = [...cells.values()].sort((a, b) => a - b);
+  const peak = counts.length ? counts[counts.length - 1] : 0;
   const max = Math.max(2, counts.length ? counts[Math.floor(counts.length * 0.95)] : 2);
   const weight = (n) => Math.log1p(n) / Math.log1p(max);
 
@@ -421,10 +434,18 @@ function renderMap() {
     ctx.stroke();
   }
 
-  const missing = onlyTreasures ? total - placed : 0;
-  $('mapNote').textContent = onlyTreasures
-    ? `${placed} de ${total} tesoros traen posición; los otros ${missing} llegan por la habilidad sin coordenadas, así que no se pueden situar. Las zonas se cuentan con las mismas celdas de 50 m del informe.`
-    : `${placed.toLocaleString('es-ES')} aperturas situadas en celdas de 50 m. Más rojo = más cofres; los puntos blancos son tesoros con posición conocida.`;
+  // Una celda son 50 m × 50 m = 0,0025 km², así que la densidad se lee directa en cofres/km².
+  const area = cells.size * 0.0025;
+  const density = area > 0 ? Math.round(placed / area) : 0;
+  $('mapTitle').textContent = metric === 'treasures' ? 'Densidad de tesoros' : 'Densidad de cofres';
+
+  if (metric === 'treasures') {
+    const missing = total - placed;
+    $('mapNote').textContent = `${placed} de ${total} tesoros traen posición (${Math.round(placed / Math.max(1, cells.size) * 10) / 10} por celda, máx. ${peak}); los otros ${missing} llegan por la habilidad sin coordenadas, así que no se pueden situar.`;
+    return;
+  }
+
+  $('mapNote').textContent = `${placed.toLocaleString('es-ES')} aperturas en ${cells.size.toLocaleString('es-ES')} celdas de 50 m (${density.toLocaleString('es-ES')} cofres/km² de media, máx. ${peak} por celda). Más rojo = más densidad; los puntos blancos son los tesoros.`;
 }
 
 window.addEventListener('resize', () => renderMap());
@@ -432,20 +453,52 @@ window.addEventListener('resize', () => renderMap());
 /* ---------------- zonas ---------------- */
 
 function renderZones() {
-  const zones = state.report?.zones ?? [];
+  const chests = state.report?.chests ?? [];
+  const groups = new Map();
+  let sinPosicion = 0;
+
+  for (const chest of chests) {
+    const x = Number(chest.x);
+    const y = Number(chest.y);
+    if (!x || !y) {
+      sinPosicion++;
+      continue;
+    }
+
+    const zone = zoneName(x, y);
+    if (!groups.has(zone.name)) {
+      groups.set(zone.name, { name: zone.name, kind: zone.kind, chests: 0, treasures: 0, distance: 0 });
+    }
+
+    const group = groups.get(zone.name);
+    group.chests++;
+    group.distance += zone.meters;
+    if (isTreasure(chest)) group.treasures++;
+  }
+
+  const zones = [...groups.values()]
+    .map((zone) => ({ ...zone, distance: Math.round(zone.distance / zone.chests) }))
+    .sort((a, b) => b.chests - a.chests || b.treasures - a.treasures);
 
   $('zonesList').innerHTML = zones.map((zone) => `
     <div class="zone">
       <span class="zone-name">${esc(zone.name)}</span>
       <span class="tag">${esc(zone.chests)} cofres</span>
-      <span class="tag ${zone.tokens > 0 ? 'tag-local' : ''}">${esc(zone.tokens)} tokens</span>
-      <span class="muted mono">${Math.round(zone.x)}, ${Math.round(zone.y)}</span>
+      <span class="tag ${zone.treasures > 0 ? 'tag-local' : ''}">${esc(zone.treasures)} tesoros</span>
+      <span class="zone-meta">${esc(zone.distance)} m ${zone.kind === 'poi' ? 'del POI' : 'del centro'}</span>
     </div>
   `).join('');
 
   $('zonesEmpty').hidden = zones.length > 0;
   if (zones.length === 0) {
     $('zonesEmpty').textContent = 'Sin coordenadas registradas todavía. Los cofres sin posición replicada no se agrupan.';
+  }
+
+  const note = $('zonesNote');
+  if (note) {
+    note.textContent = sinPosicion > 0
+      ? `${sinPosicion.toLocaleString('es-ES')} aperturas no replican posición y no entran en las zonas. Cada zona es el POI a menos de 250 m; el resto se agrupa por dirección desde el centro del mapa.`
+      : 'Cada zona es el POI a menos de 250 m; el resto se agrupa por dirección desde el centro del mapa.';
   }
 }
 
@@ -535,7 +588,6 @@ function renderAll() {
   renderMyChests();
   renderChests();
   renderPrizes();
-  renderCosmetics();
   renderMatches();
   renderZones();
   renderMap();
@@ -554,7 +606,15 @@ document.querySelectorAll('.tab').forEach((tab) => {
 });
 
 $('onlyTokens').addEventListener('change', renderChests);
-$('mapOnlyTreasures').addEventListener('change', renderMap);
+$('mapMetric').addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-metric]');
+  if (!button) return;
+  mapPrefs.metric = button.dataset.metric;
+  for (const option of $('mapMetric').children) {
+    option.classList.toggle('is-on', option === button);
+  }
+  renderMap();
+});
 
 $('mapSettingsBtn').addEventListener('click', (event) => {
   event.stopPropagation();
@@ -742,10 +802,6 @@ function applyMode() {
   const local = state.mode === 'local';
 
   $('uploadCard').hidden = !local;
-  $('privacyNotice').hidden = false;
-  $('privacyText').textContent = local
-    ? 'Las repeticiones se leen y se guardan solo en tu equipo: no se envían ni se almacenan en ningún servidor.'
-    : 'Estás en el panel local: TokenTracker.exe lee tu carpeta de repeticiones y guarda todo en data/.';
 
   $('browserDataCard').hidden = !local;
   $('browserDataCount').textContent = local ? `${state.files?.length ?? 0} archivos analizados` : '';
@@ -835,6 +891,21 @@ if ($('dropZone')) {
     event.target.value = '';
   });
 }
+
+// El botón de volver arriba aparece solo cuando la página ya se ha desplazado. Se usa un
+// centinela al principio del documento porque el observador reacciona sin depender de que
+// lleguen eventos de scroll (que se espacian cuando la pestaña está en segundo plano).
+const toTop = $('toTop');
+const sentinel = $('scrollSentinel');
+const syncToTop = () => { toTop.hidden = window.scrollY < 420; };
+window.addEventListener('scroll', syncToTop, { passive: true });
+if (sentinel && 'IntersectionObserver' in window) {
+  new IntersectionObserver(([entry]) => { toTop.hidden = entry.isIntersecting; }).observe(sentinel);
+}
+toTop.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+syncToTop();
 
 if ($('clearDataBtn')) {
   $('clearDataBtn').addEventListener('click', async () => {

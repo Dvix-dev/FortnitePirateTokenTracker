@@ -551,42 +551,6 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 
 /* ---------- cosméticos ---------- */
 
-.players {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 12px;
-}
-
-.player-card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 16px;
-}
-
-.player-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 12px;
-  font-weight: 800;
-}
-
-.slots { display: grid; gap: 8px; }
-
-.slot {
-  display: grid;
-  grid-template-columns: 92px 1fr;
-  gap: 8px;
-  font-size: 12px;
-  align-items: baseline;
-}
-
-.slot-name { color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: 0.06em; font-weight: 800; }
-
-.slot-value { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: #e6e6ee; word-break: break-all; }
-
 /* ---------- partidas ---------- */
 
 .matches { display: grid; gap: 10px; }
@@ -614,21 +578,32 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 
 /* ---------- zonas ---------- */
 
-/* ---------- aviso de privacidad y publicidad ---------- */
+/* ---------- publicidad ---------- */
 
-.notice {
-  max-width: 1080px;
-  margin: 14px auto 0;
-  padding: 11px 16px;
-  border-radius: 12px;
-  border: 1px solid rgba(61, 220, 151, 0.28);
-  background: rgba(61, 220, 151, 0.07);
-  color: #c9f5e0;
-  font-size: 13px;
-  line-height: 1.45;
+/* Laterales: solo cuando sobra ancho, para no tapar el panel en pantallas normales. */
+.ad-rail {
+  position: fixed;
+  top: 96px;
+  width: 160px;
+  min-height: 600px;
+  display: none;
+  place-items: center;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.012);
+  color: #4d4d57;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  z-index: 1;
 }
 
-.notice strong { color: #6ef0b6; }
+.ad-rail-left { left: max(16px, calc(50% - 760px)); }
+.ad-rail-right { right: max(16px, calc(50% - 760px)); }
+
+@media (min-width: 1480px) {
+  .ad-rail { display: grid; }
+}
 
 .ad-slot {
   display: grid;
@@ -668,6 +643,15 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 .dropzone strong { font-family: var(--font-display); font-size: 20px; letter-spacing: 0.02em; }
 .dropzone span { color: var(--muted); font-size: 13px; max-width: 46ch; }
 
+.dropzone .dropzone-privacy {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(61, 220, 151, 0.22);
+  color: #a8f0cd;
+  font-size: 12px;
+  max-width: 52ch;
+}
+
 /* ---------- pantalla de carga ---------- */
 
 .processing {
@@ -697,6 +681,15 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 }
 
 .processing-card h2 { margin: 0; font-size: 26px; }
+
+.processing-privacy {
+  margin: 2px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(61, 220, 151, 0.22);
+  color: #a8f0cd;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .processing-card .small { margin: 0; }
 
 .processing-step { margin: 0; color: var(--muted); font-size: 13px; min-height: 18px; }
@@ -754,6 +747,8 @@ h3 { margin: 0 0 6px; font-size: 15px; }
   transition: color .15s ease, border-color .15s ease, background .15s ease;
 }
 
+.icon-btn svg { display: block; }
+
 .icon-btn:hover,
 .icon-btn[aria-expanded="true"] {
   color: var(--gold);
@@ -764,7 +759,10 @@ h3 { margin: 0 0 6px; font-size: 15px; }
 .map-pop {
   position: absolute;
   top: 42px;
-  right: 0;
+  /* Centrado bajo el engranaje: antes colgaba del borde derecho y quedaba desplazado. */
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
   z-index: 5;
   width: 236px;
   display: grid;
@@ -1192,3 +1190,49 @@ input[type="checkbox"]:focus-visible { outline: 2px solid rgba(255, 212, 0, 0.6)
 .hero-title { -webkit-text-stroke-color: #ffffff; }
 
 .stat.is-gold .stat-value { -webkit-text-stroke-color: #ffd95a; }
+
+/* ---------- volver arriba ---------- */
+
+.scroll-sentinel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.to-top {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid var(--gold-edge);
+  background: linear-gradient(180deg, #1c1c22, #131317);
+  color: var(--gold);
+  cursor: pointer;
+  box-shadow: 0 12px 28px -14px rgba(0, 0, 0, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: transform .15s ease, color .15s ease, border-color .15s ease;
+}
+
+.to-top:hover { transform: translateY(-2px); border-color: var(--gold); color: #ffe680; }
+.to-top[hidden] { display: none; }
+
+@media (max-width: 640px) {
+  .to-top { right: 14px; bottom: 14px; }
+}
+
+@media (max-width: 760px) {
+  /* En pantallas estrechas el panel se pega al borde para no salirse de la tarjeta. */
+  .map-pop { left: auto; right: 0; transform: none; }
+}
+
+/* ---------- zonas ---------- */
+
+.zone-meta { color: var(--muted); font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums; }

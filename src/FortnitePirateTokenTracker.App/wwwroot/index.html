@@ -40,6 +40,7 @@
 </script>
 </head>
 <body>
+<div class="scroll-sentinel" id="scrollSentinel" aria-hidden="true"></div>
 <header class="topbar">
   <div class="brand">
     <span class="brand-mark"><img src="img/token.webp" alt="Tesoro pirata"></span>
@@ -52,16 +53,10 @@
   </div>
 </header>
 
-<div class="notice" id="privacyNotice" hidden>
-  <strong>Nada sale de tu navegador.</strong>
-  <span id="privacyText">Las repeticiones se leen y se guardan solo en tu equipo: no se envían ni se almacenan en ningún servidor.</span>
-</div>
-
 <nav class="tabs" id="tabs">
   <button class="tab is-active" data-view="resumen">Resumen</button>
   <button class="tab" data-view="cofres">Cofres</button>
   <button class="tab" data-view="premios">Premios</button>
-  <button class="tab" data-view="cosmeticos">Cosméticos</button>
   <button class="tab" data-view="partidas">Partidas</button>
   <button class="tab" data-view="zonas">Zonas</button>
   <button class="tab" data-view="configuracion">Configuración</button>
@@ -82,7 +77,8 @@
       <label class="dropzone" id="dropZone">
         <input type="file" id="replayInput" accept=".replay" multiple hidden>
         <strong>Arrastra aquí tus archivos .replay</strong>
-        <span>o haz clic para elegirlos. Se analizan dentro de esta pestaña: el archivo no se sube a ningún sitio.</span>
+        <span>o haz clic para elegirlos. Se analizan dentro de esta pestaña, sin esperas de subida.</span>
+        <span class="dropzone-privacy">Ni las partidas ni los datos que salen de ellas se envían ni se guardan en ningún servidor: todo se queda en la memoria de tu navegador.</span>
       </label>
       <p class="muted small">Los tienes en <code>%LOCALAPPDATA%\FortniteGame\Saved\Demos</code>. Cada repetición tarda un rato en procesarse: deja la pestaña abierta.</p>
     </div>
@@ -128,8 +124,12 @@
 
   <!-- COFRES -->
   <section class="view" id="view-cofres">
-    <h1 class="hero-title">Cofres y Tokens</h1>
+    <h1 class="hero-title">Cofres y tesoros</h1>
     <p class="hero-sub">Cada apertura detectada en tus repeticiones, con tiempo, contenedor y confianza de detección.</p>
+
+    <aside class="ad-slot" aria-label="Publicidad">
+      <span>Espacio para publicidad</span>
+    </aside>
 
     <div class="card">
       <div class="card-head">
@@ -137,7 +137,7 @@
         <span class="muted small" id="chestUpdated"></span>
         <label class="switch">
           <input type="checkbox" id="onlyTokens">
-          <span>Solo Tokens</span>
+          <span>Solo tesoros</span>
         </label>
       </div>
       <div class="table-wrap">
@@ -171,6 +171,10 @@
     <h1 class="hero-title">Premios y probabilidades</h1>
     <p class="hero-sub">Ordenados de más a menos probable por cofre abierto. Las tasas son referencia del evento, no un cálculo de tus repeticiones.</p>
 
+    <aside class="ad-slot" aria-label="Publicidad">
+      <span>Espacio para publicidad</span>
+    </aside>
+
     <div class="card">
       <div class="card-head">
         <h2>Contadores</h2>
@@ -200,19 +204,15 @@
     <p class="muted small">Fuente de las tasas: fortnite.bot/treasure. Los contadores de tu cuenta se basan solo en las repeticiones analizadas.</p>
   </section>
 
-  <!-- COSMÉTICOS -->
-  <section class="view" id="view-cosmeticos">
-    <h1 class="hero-title">Cosméticos detectados</h1>
-    <p class="hero-sub">Outfit, pico, mochila, planeadora, pantalla de carga y pack de música que las repeticiones replican de cada jugador.</p>
-    <div class="players" id="playersGrid"></div>
-    <p class="empty" id="cosmeticEmpty" hidden>Sin cosméticos detectados todavía.</p>
-    <p class="muted small">Las repeticiones actuales del juego llegan con los campos de personalización vacíos en el lector oficial; esta vista se llenará cuando el lector extendido los lea del loadout replicado.</p>
-  </section>
-
   <!-- PARTIDAS -->
   <section class="view" id="view-partidas">
     <h1 class="hero-title">Partidas</h1>
-    <p class="hero-sub">Una entrada por archivo de repetición analizado.</p>
+    <p class="hero-sub">Una entrada por archivo de repetición analizado, con los tesoros que salieron en cada una.</p>
+
+    <aside class="ad-slot" aria-label="Publicidad">
+      <span>Espacio para publicidad</span>
+    </aside>
+
     <div class="matches" id="matchesList"></div>
     <p class="empty" id="matchesEmpty" hidden>Sin partidas analizadas todavía.</p>
   </section>
@@ -220,16 +220,16 @@
   <!-- ZONAS -->
   <section class="view" id="view-zonas">
     <h1 class="hero-title">Zonas</h1>
-    <p class="hero-sub">Cofres y tesoros agrupados en celdas de 50 m para ver por dónde salen.</p>
+    <p class="hero-sub">Densidad de cofres y de tesoros sobre el mapa, y las zonas donde más salen.</p>
+
+    <aside class="ad-slot" aria-label="Publicidad">
+      <span>Espacio para publicidad</span>
+    </aside>
 
     <div class="card map-card">
       <div class="card-head">
-        <h2>Mapa de calor</h2>
+        <h2 id="mapTitle">Densidad de cofres</h2>
         <div class="map-tools">
-          <label class="switch">
-            <input type="checkbox" id="mapOnlyTreasures">
-            <span>Solo tesoros</span>
-          </label>
           <button class="icon-btn" id="mapSettingsBtn" type="button" aria-label="Ajustes del mapa" aria-expanded="false" title="Ajustes del mapa">
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3.2"></circle>
@@ -237,6 +237,13 @@
             </svg>
           </button>
           <div class="map-pop" id="mapSettings" hidden>
+            <div class="map-field">
+              <span>Densidad</span>
+              <div class="seg" id="mapMetric">
+                <button type="button" data-metric="chests" class="is-on">Cofres</button>
+                <button type="button" data-metric="treasures">Tesoros</button>
+              </div>
+            </div>
             <label class="map-field">
               <span>Opacidad</span>
               <input type="range" id="mapOpacity" min="10" max="100" step="5" value="50">
@@ -264,12 +271,17 @@
 
     <div class="zones" id="zonesList"></div>
     <p class="empty" id="zonesEmpty" hidden>Sin coordenadas registradas todavía.</p>
+    <p class="muted small" id="zonesNote"></p>
   </section>
 
   <!-- CONFIGURACIÓN -->
   <section class="view" id="view-configuracion">
     <h1 class="hero-title">Configuración</h1>
     <p class="hero-sub">En la web todo se guarda en el almacenamiento del navegador; el exe local lo guarda en <code>data/config.json</code>.</p>
+
+    <aside class="ad-slot" aria-label="Publicidad">
+      <span>Espacio para publicidad</span>
+    </aside>
 
     <div class="card" id="browserDataCard" hidden>
       <div class="card-head">
@@ -337,6 +349,10 @@
   <section class="view" id="view-guia">
     <h1 class="hero-title">Guía rápida</h1>
     <p class="hero-sub" id="guideIntro">De cero a datos en cuatro pasos, sin instalar nada.</p>
+
+    <aside class="ad-slot" aria-label="Publicidad">
+      <span>Espacio para publicidad</span>
+    </aside>
 
     <ol class="steps" id="guideSteps">
       <li>
@@ -422,11 +438,21 @@
   </div>
 </div>
 
-<aside class="ad-slot" aria-label="Publicidad" style="max-width:1080px;margin:0 auto 18px">
-  <span>Espacio para publicidad</span>
+<aside class="ad-rail ad-rail-left" aria-label="Publicidad lateral">
+  <span>Publicidad</span>
+</aside>
+<aside class="ad-rail ad-rail-right" aria-label="Publicidad lateral">
+  <span>Publicidad</span>
 </aside>
 
 <div class="toast" id="toast" hidden></div>
+
+<button class="to-top" id="toTop" type="button" aria-label="Subir arriba" title="Subir arriba" hidden>
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 19V5"></path>
+    <path d="M5 12l7-7 7 7"></path>
+  </svg>
+</button>
 
 <footer class="footer">
   <p id="privacyFooter">Tus repeticiones y los datos que salen de ellas se quedan en tu navegador. No hay subida, no hay cuentas y no se guarda nada en ningún servidor.</p>
@@ -440,6 +466,7 @@
     <p class="processing-step" id="processingStep"></p>
     <div class="processing-bar"><i id="processingBar"></i></div>
     <p class="muted small">Todo ocurre en tu navegador. Puedes tardar un poco: una repetición grande tarda alrededor de medio minuto.</p>
+    <p class="processing-privacy">Ni las partidas ni los datos que salen de ellas se envían ni se guardan en ningún servidor: se leen aquí y el resultado se queda en el almacenamiento de este navegador.</p>
   </div>
 </div>
 
